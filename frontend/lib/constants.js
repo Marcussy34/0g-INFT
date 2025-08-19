@@ -31,25 +31,103 @@ export const CONTRACT_ADDRESSES = {
 // Off-chain service configuration
 export const OFFCHAIN_SERVICE_URL = 'http://localhost:3000'
 
-// Contract ABIs (minimal required functions)
+// Contract ABIs (proper JSON format for wagmi v2)
 export const INFT_ABI = [
-  'function mint(address to, string memory encryptedURI, bytes32 metadataHash) external returns (uint256)',
-  'function authorizeUsage(uint256 tokenId, address user) external',
-  'function revokeUsage(uint256 tokenId, address user) external', 
-  'function transfer(address from, address to, uint256 tokenId, bytes calldata sealedKey, bytes calldata proof) external',
-  'function clone(address from, address to, uint256 tokenId, bytes calldata sealedKey, bytes calldata proof) external returns (uint256)',
-  'function isAuthorized(uint256 tokenId, address user) external view returns (bool)',
-  'function ownerOf(uint256 tokenId) external view returns (address)',
-  'function balanceOf(address owner) external view returns (uint256)',
-  'function getCurrentTokenId() external view returns (uint256)',
-  'function encryptedURI(uint256 tokenId) external view returns (string)',
-  'function metadataHash(uint256 tokenId) external view returns (bytes32)',
-  'function authorizedUsersOf(uint256 tokenId) external view returns (address[])',
-  'function name() external view returns (string)',
-  'function symbol() external view returns (string)',
-  // Events
-  'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)',
-  'event AuthorizedUsage(uint256 indexed tokenId, address indexed user, bool authorized)',
-  'event Transferred(uint256 indexed tokenId, address indexed from, address indexed to, bytes32 proofHash)',
-  'event Cloned(uint256 indexed originalTokenId, uint256 indexed newTokenId, address indexed to, bytes32 proofHash)',
+  {
+    "inputs": [
+      {"internalType": "address", "name": "to", "type": "address"},
+      {"internalType": "string", "name": "_encryptedURI", "type": "string"},
+      {"internalType": "bytes32", "name": "_metadataHash", "type": "bytes32"}
+    ],
+    "name": "mint",
+    "outputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "tokenId", "type": "uint256"},
+      {"internalType": "address", "name": "user", "type": "address"}
+    ],
+    "name": "authorizeUsage",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "tokenId", "type": "uint256"},
+      {"internalType": "address", "name": "user", "type": "address"}
+    ],
+    "name": "revokeUsage",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "tokenId", "type": "uint256"},
+      {"internalType": "address", "name": "user", "type": "address"}
+    ],
+    "name": "isAuthorized",
+    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+    "name": "ownerOf",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "address", "name": "owner", "type": "address"}],
+    "name": "balanceOf",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCurrentTokenId",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+    "name": "encryptedURI",
+    "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+    "name": "metadataHash",
+    "outputs": [{"internalType": "bytes32", "name": "", "type": "bytes32"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "name",
+    "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "symbol", 
+    "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+    "name": "authorizedUsersOf",
+    "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
 ]

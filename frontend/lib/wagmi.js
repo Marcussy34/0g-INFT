@@ -11,7 +11,7 @@ export const config = createConfig({
     // walletConnect({ projectId: 'your-project-id' }),
   ],
   transports: {
-    [ZERO_G_NETWORK.id]: http(),
+    [ZERO_G_NETWORK.id]: http('https://evmrpc-testnet.0g.ai'),
   },
 })
 

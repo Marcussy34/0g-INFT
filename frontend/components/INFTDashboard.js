@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
-import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import React, { useState, useEffect, useCallback } from 'react'
+import { useAccount, useConnect, useDisconnect, useReadContract } from 'wagmi'
 import { 
   Wallet, 
   Coins, 
@@ -20,15 +20,117 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { useINFT } from '../lib/useINFT'
 import { addZeroGNetwork } from '../lib/wagmi'
+import { CONTRACT_ADDRESSES, INFT_ABI } from '../lib/constants'
+
+
+
+/**
+ * Component to display user's owned token IDs
+ */
+function MyTokensList({ userAddress }) {
+  const [ownedTokens, setOwnedTokens] = useState([])
+  const [loading, setLoading] = useState(true)
+  
+  useEffect(() => {
+    if (!userAddress) return
+    
+    const fetchOwnedTokens = async () => {
+      try {
+        setLoading(true)
+        const tokens = []
+        
+        // Check ownership of tokens 1 and 2 (since we know these exist)
+        // In a real app, you'd use events or a more efficient method
+        // Check tokens up to the current token ID
+        const maxTokenId = Math.max(3, 1) // Start from at least 1, check up to currentTokenId
+        for (let tokenId = 1; tokenId < maxTokenId; tokenId++) {
+          try {
+            const response = await fetch(`https://evmrpc-testnet.0g.ai`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'eth_call',
+                params: [{
+                  to: '0xF170237160314f5D8526f981b251b56e25347Ed9',
+                  data: `0x6352211e${tokenId.toString(16).padStart(64, '0')}`  // ownerOf(uint256)
+                }, 'latest']
+              })
+            })
+            
+            const result = await response.json()
+            if (result.result && result.result !== '0x') {
+              const owner = '0x' + result.result.slice(-40)
+              if (owner.toLowerCase() === userAddress.toLowerCase()) {
+                tokens.push(tokenId)
+              }
+            }
+          } catch (error) {
+            console.log(`Token ${tokenId} check failed:`, error)
+          }
+        }
+        
+        setOwnedTokens(tokens)
+      } catch (error) {
+        console.error('Error fetching owned tokens:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchOwnedTokens()
+  }, [userAddress])
+  
+  if (loading) {
+    return <p className="text-gray-500">Loading your tokens...</p>
+  }
+  
+  if (ownedTokens.length === 0) {
+    return <p className="text-gray-500">No tokens found</p>
+  }
+  
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-gray-600 mb-3">You own the following Token IDs:</p>
+      <div className="flex flex-wrap gap-2">
+        {ownedTokens.map(tokenId => (
+          <div key={tokenId} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
+            Token #{tokenId}
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-green-600 mt-2">
+        ✅ You can perform inference with any of these tokens
+      </p>
+    </div>
+  )
+}
 
 /**
  * Main INFT Dashboard Component
  * Provides UI for all INFT operations: mint, authorize, infer, transfer
  */
 export default function INFTDashboard() {
-  const { address, isConnected } = useAccount()
+  const [mounted, setMounted] = useState(false)
+  const { address, isConnected, chain } = useAccount()
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
+
+  // Fix hydration error by only rendering after mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Wallet state:', { 
+      address, 
+      isConnected, 
+      chain: chain?.id,
+      chainName: chain?.name 
+    })
+  }, [address, isConnected, chain])
   
   const {
     currentTokenId,
@@ -58,7 +160,7 @@ export default function INFTDashboard() {
   })
   
   const [inferForm, setInferForm] = useState({
-    tokenId: '1',
+    tokenId: '2',  // Default to token 2 which you own
     input: ''
   })
   
@@ -70,6 +172,13 @@ export default function INFTDashboard() {
 
   const [inferenceResult, setInferenceResult] = useState(null)
   const [isInferring, setIsInferring] = useState(false)
+  
+  // Authorization checker state
+  const [authCheckForm, setAuthCheckForm] = useState({
+    tokenId: '1'
+  })
+  const [authCheckResults, setAuthCheckResults] = useState(null)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(false)
 
   // Handle wallet connection
   const handleConnect = async () => {
@@ -84,19 +193,30 @@ export default function INFTDashboard() {
   // Handle mint INFT
   const handleMint = async (e) => {
     e.preventDefault()
+    console.log('Mint button clicked', mintForm)
+    
     if (!mintForm.recipient || !mintForm.encryptedURI || !mintForm.metadataHash) {
       alert('Please fill all fields')
       return
     }
     
     try {
-      await mintINFT(
+      console.log('Calling mintINFT with:', {
+        recipient: mintForm.recipient,
+        encryptedURI: mintForm.encryptedURI,
+        metadataHash: mintForm.metadataHash
+      })
+      
+      const result = await mintINFT(
         mintForm.recipient,
         mintForm.encryptedURI,
         mintForm.metadataHash
       )
+      
+      console.log('Mint transaction submitted successfully, result:', result)
     } catch (error) {
       console.error('Mint failed:', error)
+      console.error('Error details:', error.stack)
       alert('Mint failed: ' + error.message)
     }
   }
@@ -104,16 +224,29 @@ export default function INFTDashboard() {
   // Handle authorize usage
   const handleAuthorize = async (e) => {
     e.preventDefault()
+    console.log('Authorize button clicked', authorizeForm)
+    
     if (!authorizeForm.tokenId || !authorizeForm.userAddress) {
       alert('Please fill all fields')
       return
     }
     
     try {
+      console.log('🔐 Starting authorization process for:', {
+        tokenId: authorizeForm.tokenId,
+        userAddress: authorizeForm.userAddress
+      })
+      
       await authorizeUsage(authorizeForm.tokenId, authorizeForm.userAddress)
+      
+      console.log('✅ Authorization transaction submitted successfully')
+      console.log('⏳ Please wait for transaction confirmation below...')
+      
+      // Clear the form on successful submission
+      setAuthorizeForm({ tokenId: '', userAddress: '' })
     } catch (error) {
-      console.error('Authorize failed:', error)
-      alert('Authorize failed: ' + error.message)
+      console.error('❌ Authorization failed:', error)
+      alert('Authorization failed: ' + error.message)
     }
   }
 
@@ -141,6 +274,142 @@ export default function INFTDashboard() {
   const handleTransfer = async (e) => {
     e.preventDefault()
     alert('Transfer functionality requires TEE attestation. This is a placeholder for the complete implementation.')
+  }
+
+  // Authorization check using wagmi hooks (simple and reliable)
+  const handleAuthCheck = async (e) => {
+    e.preventDefault()
+    
+    if (!authCheckForm.tokenId) {
+      alert('Please enter a token ID')
+      return
+    }
+    
+    console.log('🔍 Starting authorization check for token ID:', authCheckForm.tokenId)
+    setIsCheckingAuth(true)
+    setAuthCheckResults(null)
+    
+    try {
+      // Use wagmi's built-in fetch capabilities
+      const { readContract } = await import('viem/actions')
+      const { createPublicClient, http } = await import('viem')
+      const { defineChain } = await import('viem')
+      
+      // Define 0G chain
+      const zeroGChain = defineChain({
+        id: 16601,
+        name: '0G Galileo Testnet',
+        network: '0g-galileo',
+        nativeCurrency: {
+          name: '0G',
+          symbol: '0G',
+          decimals: 18,
+        },
+        rpcUrls: {
+          default: {
+            http: ['https://evmrpc-testnet.0g.ai'],
+          },
+        },
+      })
+      
+      const client = createPublicClient({
+        chain: zeroGChain,
+        transport: http(),
+      })
+      
+      // Get token owner
+      const tokenOwner = await readContract(client, {
+        address: CONTRACT_ADDRESSES.INFT,
+        abi: INFT_ABI,
+        functionName: 'ownerOf',
+        args: [BigInt(authCheckForm.tokenId)],
+      })
+      
+      console.log('Token owner:', tokenOwner)
+      
+      // Check specific addresses for authorization
+      const addressesToCheck = [
+        address,
+        tokenOwner,
+      ].filter(addr => addr) // Remove nulls/undefined
+      
+      // Add your specific address if it's not already included
+      if (!addressesToCheck.find(addr => addr.toLowerCase() === '0x32f91e4e2c60a9c16cae736d3b42152b331c147f')) {
+        addressesToCheck.push('0x32F91E4E2c60A9C16cAE736D3b42152B331c147F')
+      }
+      
+      // Remove duplicates by converting to lowercase for comparison
+      const uniqueAddresses = []
+      for (const addr of addressesToCheck) {
+        if (!uniqueAddresses.find(existing => existing.toLowerCase() === addr.toLowerCase())) {
+          uniqueAddresses.push(addr)
+        }
+      }
+      
+      const authResults = []
+      
+      console.log('Addresses to check:', uniqueAddresses)
+      
+      for (const checkAddr of uniqueAddresses) {
+        try {
+          console.log(`Checking authorization for: ${checkAddr}`)
+          
+          const isAuthorized = await readContract(client, {
+            address: CONTRACT_ADDRESSES.INFT,
+            abi: INFT_ABI,
+            functionName: 'isAuthorized',
+            args: [BigInt(authCheckForm.tokenId), checkAddr],
+          })
+          
+          console.log(`${checkAddr} authorization result:`, isAuthorized)
+          
+          authResults.push({
+            address: checkAddr,
+            isAuthorized: !!isAuthorized,
+            isOwner: checkAddr.toLowerCase() === tokenOwner.toLowerCase(),
+            isCurrentUser: checkAddr.toLowerCase() === address?.toLowerCase()
+          })
+        } catch (error) {
+          console.error(`Failed to check authorization for ${checkAddr}:`, error)
+          // Still add the address to results with error info
+          authResults.push({
+            address: checkAddr,
+            isAuthorized: false,
+            isOwner: checkAddr.toLowerCase() === tokenOwner.toLowerCase(),
+            isCurrentUser: checkAddr.toLowerCase() === address?.toLowerCase(),
+            error: error.message
+          })
+        }
+      }
+      
+      setAuthCheckResults({
+        tokenId: authCheckForm.tokenId,
+        tokenOwner,
+        authorizations: authResults,
+        checkedAt: new Date().toLocaleTimeString()
+      })
+      
+      console.log('✅ Authorization check completed:', authResults)
+      
+    } catch (error) {
+      console.error('❌ Authorization check failed:', error)
+      alert('Authorization check failed: ' + error.message)
+    } finally {
+      setIsCheckingAuth(false)
+    }
+  }
+
+  // Show loading until component is mounted (fixes hydration error)
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <p>Loading...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   if (!isConnected) {
@@ -245,6 +514,24 @@ export default function INFTDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* My Tokens Section */}
+        {userBalance && userBalance > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Coins className="h-5 w-5" />
+                My Token IDs
+              </CardTitle>
+              <CardDescription>
+                Tokens you own and can use for inference
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MyTokensList userAddress={address} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Main Operations */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -441,22 +728,166 @@ export default function INFTDashboard() {
               </form>
             </CardContent>
           </Card>
+
+          {/* Authorization Checker */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Check Authorizations
+              </CardTitle>
+              <CardDescription>
+                Check who is authorized to use a specific INFT token
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAuthCheck} className="space-y-4">
+                <div>
+                  <Label htmlFor="checkTokenId">Token ID</Label>
+                  <Input
+                    id="checkTokenId"
+                    type="number"
+                    value={authCheckForm.tokenId}
+                    onChange={(e) => setAuthCheckForm({
+                      ...authCheckForm,
+                      tokenId: e.target.value
+                    })}
+                    placeholder="Enter token ID to check"
+                    min="1"
+                  />
+                </div>
+                
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={isCheckingAuth}
+                >
+                  {isCheckingAuth ? 'Checking...' : 'Check Authorizations'}
+                </Button>
+              </form>
+
+              {/* Authorization Results */}
+              {authCheckResults && (
+                <div className="mt-6 space-y-4">
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-lg mb-3">
+                      Authorization Status for Token #{authCheckResults.tokenId}
+                    </h4>
+                    
+                    {authCheckResults.tokenOwner && (
+                      <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                        <p className="text-sm font-medium text-blue-700">👑 Token Owner:</p>
+                        <p className="text-sm text-blue-600 font-mono break-all">
+                          {authCheckResults.tokenOwner}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <p className="font-medium text-gray-700">Authorization Status:</p>
+                      <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded mb-3">
+                        💡 <strong>Note:</strong> Token owners must explicitly authorize themselves for inference access.
+                      </div>
+                      {authCheckResults.authorizations.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No addresses checked</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {authCheckResults.authorizations.map((auth, index) => (
+                            <div
+                              key={index}
+                              className={`p-3 rounded-lg border ${
+                                auth.isAuthorized 
+                                  ? 'bg-green-50 border-green-200' 
+                                  : 'bg-gray-50 border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <p className="text-sm font-mono break-all">
+                                    {auth.address}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {auth.isOwner && (
+                                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                        👑 Owner
+                                      </span>
+                                    )}
+                                    {auth.isCurrentUser && (
+                                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                                        👤 You
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  {auth.isAuthorized ? (
+                                    <span className="text-green-600 font-semibold">✅ Authorized</span>
+                                  ) : (
+                                    <span className="text-gray-500">❌ Not Authorized</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-gray-500 mt-3">
+                      ⏰ Checked at {authCheckResults.checkedAt}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Transaction Status */}
         {(isWritePending || isConfirming || isConfirmed) && (
-          <Card className="mt-6">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                {isWritePending && <p>Transaction pending...</p>}
-                {isConfirming && <p>Waiting for confirmation...</p>}
+          <Card className="mt-6 border-l-4 border-l-blue-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5" />
+                Transaction Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {isWritePending && (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <p className="text-blue-600 font-medium">📤 Transaction submitted to blockchain...</p>
+                  </div>
+                )}
+                {isConfirming && (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+                    <p className="text-yellow-600 font-medium">⏳ Waiting for blockchain confirmation...</p>
+                  </div>
+                )}
                 {isConfirmed && (
-                  <div>
-                    <p className="text-green-600 font-semibold">Transaction confirmed!</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 rounded-full bg-green-600 flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                      <p className="text-green-600 font-semibold">✅ Transaction confirmed successfully!</p>
+                    </div>
+                    <p className="text-sm text-gray-600">Your authorization has been processed and is now active on the blockchain.</p>
                     {hash && (
-                      <p className="text-sm text-gray-500 mt-1">
-                        Hash: {hash}
-                      </p>
+                      <div className="bg-gray-100 p-3 rounded">
+                        <p className="text-sm text-gray-700 font-medium">Transaction Hash:</p>
+                        <p className="text-xs text-gray-600 font-mono break-all">{hash}</p>
+                        <a 
+                          href={`https://chainscan-galileo.0g.ai/tx/${hash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 text-sm mt-1 inline-block"
+                        >
+                          🔗 View on 0G Explorer
+                        </a>
+                      </div>
                     )}
                   </div>
                 )}
@@ -467,10 +898,21 @@ export default function INFTDashboard() {
 
         {/* Error Display */}
         {writeError && (
-          <Card className="mt-6 border-red-200 bg-red-50">
-            <CardContent className="p-6">
-              <p className="text-red-600 font-semibold">Transaction Error:</p>
-              <p className="text-red-500 text-sm mt-1">{writeError.message}</p>
+          <Card className="mt-6 border-l-4 border-l-red-500 bg-red-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-700">
+                <span className="text-lg">❌</span>
+                Transaction Failed
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p className="text-red-600 font-medium">Authorization transaction failed:</p>
+                <p className="text-red-700 text-sm bg-red-100 p-2 rounded">{writeError.message}</p>
+                <p className="text-xs text-red-600">
+                  💡 Common causes: Insufficient gas, network issues, or user rejected transaction
+                </p>
+              </div>
             </CardContent>
           </Card>
         )}

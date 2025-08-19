@@ -7,13 +7,15 @@ import { CONTRACT_ADDRESSES, INFT_ABI, OFFCHAIN_SERVICE_URL } from './constants'
  * Provides functions for mint, authorize, transfer, and inference operations
  */
 export function useINFT() {
-  const { address: account } = useAccount()
+  const { address: account, chain } = useAccount()
   const { writeContract, data: hash, isPending: isWritePending, error: writeError } = useWriteContract()
   
   // Wait for transaction confirmation
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
   })
+
+
 
   // Read functions
   const { data: currentTokenId } = useReadContract({
@@ -32,17 +34,27 @@ export function useINFT() {
 
   // Mint INFT function
   const mintINFT = async (recipient, encryptedURI, metadataHash) => {
+    console.log('mintINFT called with:', { recipient, encryptedURI, metadataHash })
+    
     if (!isAddress(recipient)) {
       throw new Error('Invalid recipient address')
     }
     
+    console.log('About to call writeContract with:', {
+      address: CONTRACT_ADDRESSES.INFT,
+      functionName: 'mint',
+      args: [recipient, encryptedURI, metadataHash],
+    })
+    
     try {
-      await writeContract({
+      const result = await writeContract({
         address: CONTRACT_ADDRESSES.INFT,
         abi: INFT_ABI,
         functionName: 'mint',
         args: [recipient, encryptedURI, metadataHash],
       })
+      console.log('writeContract result:', result)
+      return result
     } catch (error) {
       console.error('Mint error:', error)
       throw error
