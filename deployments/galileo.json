@@ -56,6 +56,33 @@
         "iv": "0xa64da9cbc7e6315ed3a4c048",
         "tag": "0xc4d64ebeba23782c1d95d1579c017dc8",
         "storageTimestamp": "2025-08-19T13:28:57.872Z"
+      },
+      "phase5Authorization": {
+        "testResults": {
+          "authorizationGrantTx": "0x27663c97f40a0415d846ff9917a7d2addfa6e93468acc41a972fe9f30b041063",
+          "authorizationGrantGasUsed": "93292",
+          "secondAuthorizationTx": "0x8531c5aadbb860b1c1c9cd18522d99580584f82df54b89c69d51c8653e0726e1",
+          "secondAuthorizationGasUsed": "75964",
+          "authorizationRevokeTx": "0x6ff13f895cf729c857e3684c089a7ee32111d17da374fa4a45c0cc586201e48f",
+          "authorizationRevokeGasUsed": "39004",
+          "functionsVerified": [
+            "authorizeUsage(uint256 tokenId, address user)",
+            "revokeUsage(uint256 tokenId, address user)", 
+            "isAuthorized(uint256 tokenId, address user)",
+            "authorizedUsersOf(uint256 tokenId)"
+          ],
+          "eventsVerified": [
+            "AuthorizedUsage(uint256 indexed tokenId, address indexed user, bool authorized)"
+          ],
+          "testTimestamp": "2025-08-19T14:25:00.000Z"
+        },
+        "currentAuthorizations": [
+          {
+            "user": "0x32F91E4E2c60A9C16cAE736D3b42152B331c147F",
+            "authorized": true,
+            "timestamp": "2025-08-19T14:25:00.000Z"
+          }
+        ]
       }
     }
   ]
