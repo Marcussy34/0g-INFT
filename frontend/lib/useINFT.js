@@ -152,19 +152,65 @@ export function useINFT() {
         }),
       })
 
+      // Handle different HTTP error codes with user-friendly messages
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        let errorMessage = 'Inference request failed'
+        
+        switch (response.status) {
+          case 403:
+            errorMessage = 'Access denied: You are not authorized to use this INFT. Please check if you have been granted usage permissions for this token.'
+            break
+          case 404:
+            errorMessage = 'INFT not found: The specified token ID does not exist or is not available.'
+            break
+          case 400:
+            errorMessage = 'Invalid request: Please check your input and token ID.'
+            break
+          case 429:
+            errorMessage = 'Rate limit exceeded: Too many requests. Please wait a moment and try again.'
+            break
+          case 500:
+            errorMessage = 'Server error: The inference service is currently unavailable. Please try again later.'
+            break
+          case 503:
+            errorMessage = 'Service unavailable: The inference service is temporarily down for maintenance.'
+            break
+          default:
+            errorMessage = `Inference service error (${response.status}): Please try again or contact support.`
+        }
+        
+        console.warn(`Inference failed with status ${response.status}:`, errorMessage)
+        const error = new Error(errorMessage)
+        error.handled = true // Mark as handled to prevent dev overlay
+        throw error
       }
 
       const result = await response.json()
       
       if (!result.success) {
-        throw new Error(result.error || 'Inference failed')
+        const errorMsg = result.error || 'Inference processing failed'
+        console.warn('Inference result error:', errorMsg)
+        const error = new Error(errorMsg)
+        error.handled = true
+        throw error
       }
 
       return result
     } catch (error) {
-      console.error('Inference error:', error)
+      // Don't log the full stack trace for user-facing errors
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        const networkError = 'Network error: Cannot connect to inference service. Please check if the service is running.'
+        console.warn('Network error during inference:', error.message)
+        const netError = new Error(networkError)
+        netError.handled = true
+        throw netError
+      }
+      
+      // Re-throw our custom error messages as-is, but mark as handled
+      if (!error.handled) {
+        console.warn('Inference error:', error.message)
+        error.handled = true
+      }
       throw error
     }
   }

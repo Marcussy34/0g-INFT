@@ -172,6 +172,7 @@ export default function INFTDashboard() {
 
   const [inferenceResult, setInferenceResult] = useState(null)
   const [isInferring, setIsInferring] = useState(false)
+  const [inferenceError, setInferenceError] = useState(null)
   
   // Authorization checker state
   const [authCheckForm, setAuthCheckForm] = useState({
@@ -251,23 +252,39 @@ export default function INFTDashboard() {
   }
 
   // Handle inference
-  const handleInference = async (e) => {
+  const handleInference = (e) => {
     e.preventDefault()
     if (!inferForm.tokenId || !inferForm.input) {
       alert('Please fill all fields')
       return
     }
     
-    setIsInferring(true)
-    try {
-      const result = await performInference(inferForm.tokenId, inferForm.input)
-      setInferenceResult(result)
-    } catch (error) {
-      console.error('Inference failed:', error)
-      alert('Inference failed: ' + error.message)
-    } finally {
-      setIsInferring(false)
+    // Wrap async operation to prevent unhandled promise rejection
+    const runInference = async () => {
+      setIsInferring(true)
+      setInferenceError(null) // Clear previous errors
+      setInferenceResult(null) // Clear previous results
+      
+      try {
+        const result = await performInference(inferForm.tokenId, inferForm.input)
+        setInferenceResult(result)
+        setInferenceError(null) // Clear any previous errors on success
+      } catch (error) {
+        // Handle the error gracefully without propagating to error boundary
+        console.warn('Inference failed (handled):', error.message)
+        setInferenceError(error.message)
+        setInferenceResult(null)
+      } finally {
+        setIsInferring(false)
+      }
     }
+    
+    // Execute the async operation and catch any unhandled rejections
+    runInference().catch((error) => {
+      console.warn('Unhandled inference error:', error.message)
+      setInferenceError(error.message || 'An unexpected error occurred')
+      setIsInferring(false)
+    })
   }
 
   // Handle transfer (placeholder - requires TEE integration)
@@ -684,14 +701,37 @@ export default function INFTDashboard() {
                   {isInferring ? 'Processing...' : 'Run Inference'}
                 </Button>
                 
+                {/* Inference Success Result */}
                 {inferenceResult && (
                   <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <h4 className="font-semibold text-green-800 mb-2">Inference Result:</h4>
+                    <h4 className="font-semibold text-green-800 mb-2">✅ Inference Result:</h4>
                     <p className="text-green-700">{inferenceResult.output}</p>
                     {inferenceResult.proof && (
                       <p className="text-xs text-green-600 mt-2">
-                        Proof: {inferenceResult.proof.slice(0, 50)}...
+                        🔐 Proof: {inferenceResult.proof.slice(0, 50)}...
                       </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Inference Error Display */}
+                {inferenceError && (
+                  <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <h4 className="font-semibold text-red-800 mb-2">❌ Inference Failed:</h4>
+                    <p className="text-red-700">{inferenceError}</p>
+                    {inferenceError.includes('not authorized') && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-sm text-blue-700">
+                          💡 <strong>Need access?</strong> Ask the token owner to authorize your address using the "Authorize User" section above.
+                        </p>
+                      </div>
+                    )}
+                    {inferenceError.includes('Network error') && (
+                      <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                        <p className="text-sm text-yellow-700">
+                          🔧 <strong>Troubleshooting:</strong> Make sure the off-chain service is running on localhost:3000
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
