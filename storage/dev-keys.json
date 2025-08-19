@@ -1,0 +1,13 @@
+{
+  "encryptedURI": "0g://storage/0xe3bf3e775364d9eb24fe11106ad035bebda6c2b0f2b0586ad4397246c864aedc",
+  "storageRootHash": "0xe3bf3e775364d9eb24fe11106ad035bebda6c2b0f2b0586ad4397246c864aedc",
+  "transactionHash": {
+    "txHash": "0x49b84b594d66addb24721e845986786bb29b3542248bac419d77f43a73998b16",
+    "rootHash": "0xe3bf3e775364d9eb24fe11106ad035bebda6c2b0f2b0586ad4397246c864aedc"
+  },
+  "metadataHash": "0xa43868e7e1335a6070b9ef4ec1c89a23050d73d3173f487557c56b51f2c34e3b",
+  "key": "0xa3741dcea555600155d33406b8e1b255f3916d728d2eb595bc6c80b4afcdec62",
+  "iv": "0xa64da9cbc7e6315ed3a4c048",
+  "tag": "0xc4d64ebeba23782c1d95d1579c017dc8",
+  "timestamp": "2025-08-19T13:28:57.872Z"
+}
