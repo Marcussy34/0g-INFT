@@ -9,23 +9,23 @@ This version fixes Mermaid syntax so diagrams render on GitHub.
 
 ```mermaid
 flowchart LR
-  subgraph OnChain["0G Chain (EVM)"]
-    C[ERC-7857 Contract]
+  subgraph OnChain["0G Chain - EVM"]
+    C["ERC-7857 Contract"]
   end
 
-  subgraph OffChain["Off-chain / Oracles"]
-    O1[TEE Oracle: Re-encrypt + Attest]
-    O2[ZKP Prover: Re-encrypt Proof]
+  subgraph OffChain["Off-chain - Oracles"]
+    O1["TEE Oracle - Re-encrypt + Attest"]
+    O2["ZKP Prover - Re-encrypt Proof"]
   end
 
   subgraph Storage["0G Storage"]
-    M[Encrypted AI Metadata (weights, config, memory)]
+    M["Encrypted AI Metadata - weights, config, memory"]
   end
 
-  U1[Current Owner (PubKey A)]
-  U2[New Owner (PubKey B)]
-  COMP[0G Compute (verifiable inference)]
-  DA[0G Data Availability]
+  U1["Current Owner - PubKey A"]
+  U2["New Owner - PubKey B"]
+  COMP["0G Compute - verifiable inference"]
+  DA["0G Data Availability"]
 
   U1 -->|owns| C
   C -->|URI + hash| M
@@ -53,7 +53,8 @@ sequenceDiagram
 
   Note over Dev: "Train or assemble the AI agent"
   Dev->>Enc: Produce payload (weights, config, state)
-  Enc->>Enc: Encrypt with AES-GCM; seal key to Owner pubkey
+  Enc->>Enc: Encrypt with AES-GCM
+  Enc->>Enc: Seal key to Owner pubkey
   Enc->>Store: Upload encrypted blob
   Store-->>Dev: Return encryptedURI + hash
   Dev->>C: mint(tokenId, encryptedURI, hash, owner)
@@ -91,7 +92,8 @@ sequenceDiagram
   participant S as 0G Storage
 
   A->>TEE: Provide encryptedURI_A + sealedKey_A + B pubkey
-  TEE->>TEE: Re-encrypt payload + seal new key to B
+  TEE->>TEE: Re-encrypt payload
+  TEE->>TEE: Seal new key to B
   TEE-->>A: sealedKey_B + attestation proof + new encryptedURI
   A->>C: transfer(tokenId, sealedKey_B, proof)
   C->>C: Verify attestation + update URI/hash
@@ -112,7 +114,8 @@ sequenceDiagram
   participant C as ERC-7857
 
   A->>Prover: Provide old ciphertext + B pubkey
-  Prover->>Prover: Re-encrypt and generate zk proof of correctness
+  Prover->>Prover: Re-encrypt payload
+  Prover->>Prover: Generate zk proof of correctness
   Prover-->>A: Return re-encrypted material + zk proof
   A->>C: transfer(tokenId, sealedKey_B, zkProof)
   C->>C: Verify zk proof + update state
