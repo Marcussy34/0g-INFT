@@ -1,10 +1,10 @@
 {
   "oracle": {
-    "address": "0xd84254b80e4C41A88aF309793F180a206421b450",
+    "address": "0x567e70a52AB420c525D277b0020260a727A735dB",
     "deployer": "0x32F91E4E2c60A9C16cAE736D3b42152B331c147F",
-    "deploymentTx": "0x43133cf2c4bc497cb7dba56b6f30d8c12e83d1c90b9a3664c24950c6569734b4",
-    "blockNumber": 5222639,
-    "timestamp": "2025-08-19T14:09:25.798Z",
+    "deploymentTx": "0xee402097b2060e8f7c4cbc69e32d314b061ceb53c149266498401c955b487cfe",
+    "blockNumber": 5222811,
+    "timestamp": "2025-08-19T14:14:33.933Z",
     "contractName": "OracleStub",
     "network": {
       "name": "galileo",
@@ -38,5 +38,25 @@
       "name": "galileo",
       "chainId": "16601"
     }
-  }
+  },
+  "mintedTokens": [
+    {
+      "tokenId": 1,
+      "owner": "0x32F91E4E2c60A9C16cAE736D3b42152B331c147F",
+      "encryptedURI": "0g://storage/0xe3bf3e775364d9eb24fe11106ad035bebda6c2b0f2b0586ad4397246c864aedc",
+      "metadataHash": "0xa43868e7e1335a6070b9ef4ec1c89a23050d73d3173f487557c56b51f2c34e3b",
+      "storageRootHash": "0xe3bf3e775364d9eb24fe11106ad035bebda6c2b0f2b0586ad4397246c864aedc",
+      "mintTransaction": {
+        "hash": "0xfec0c379ae2932ddecc5938ef15ead00963b1f28c2c1d718f48cedb7524e8b5f",
+        "gasUsed": "190138",
+        "timestamp": "2025-08-19T14:18:44.194Z"
+      },
+      "phase1Storage": {
+        "encryptionKey": "0xa3741dcea555600155d33406b8e1b255f3916d728d2eb595bc6c80b4afcdec62",
+        "iv": "0xa64da9cbc7e6315ed3a4c048",
+        "tag": "0xc4d64ebeba23782c1d95d1579c017dc8",
+        "storageTimestamp": "2025-08-19T13:28:57.872Z"
+      }
+    }
+  ]
 }

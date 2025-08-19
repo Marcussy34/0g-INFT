@@ -1,0 +1,4 @@
+.exit
+ç
+çççç
+npx hardhat run -e "const INFT = await ethers.getContractFactory('INFT'); const contract = INFT.attach('0xF170237160314f5D8526f981b251b56e25347Ed9'); console.log('Token 1 Owner:', await contract.ownerOf(1)); console.log('Token 1 URI:', await contract.tokenURI(1)); console.log('Token 1 Metadata Hash:', await contract.metadataHash(1)); console.log('Contract Name:', await contract.name()); console.log('Contract Symbol:', await contract.symbol());" --network galileo
