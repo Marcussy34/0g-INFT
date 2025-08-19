@@ -1,2 +1,6 @@
-!env
-!env.example
+# Allow .env.example files to be viewed/edited by Cursor
+!.env.example
+!*.env.example
+
+# Still ignore actual .env files (they contain secrets)
+.env
