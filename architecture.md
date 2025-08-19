@@ -150,3 +150,55 @@ sequenceDiagram
 2. TEE or ZKP service re‑encrypts payload for recipient and returns proof.  
 3. Contract verifies proof and updates state.  
 4. Recipient decrypts with sealed key.  
+
+---
+
+## 8) On-Chain vs Off-Chain Responsibilities
+
+### On-Chain (0G Chain, Solidity)
+- Token ownership (ERC-721 base).  
+- ERC-7857 extensions: `transfer`, `clone`, `authorizeUsage`.  
+- Stores lightweight references: `encryptedURI` and `metadataHash`.  
+- Verifies proofs (TEE attestations or ZKPs).  
+- Updates state on valid transfer or authorization.  
+
+```solidity
+contract ERC7857 is ERC721 {
+    mapping(uint256 => string) public encryptedURI;
+    mapping(uint256 => bytes32) public metadataHash;
+
+    function transfer(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes calldata sealedKeyForTo,
+        bytes calldata proof
+    ) external {
+        require(verifyProof(proof, metadataHash[tokenId]), "Invalid proof");
+        _transfer(from, to, tokenId);
+    }
+}
+```
+
+### Off-Chain (Services + Storage + Compute)
+- **0G Storage:** hosts encrypted AI bundles permanently.  
+- **TEE/ZKP Oracle:** performs re-encryption, produces proof of correctness.  
+- **0G Compute:** executes inference jobs when authorized.  
+
+```typescript
+function reencrypt(oldCipher, oldKey, newPubKey) {
+    // inside TEE or as ZKP circuit
+    decrypted = decrypt(oldCipher, oldKey);
+    newCipher = encrypt(decrypted, newPubKey);
+
+    if (TEE) {
+        return { sealedKey: newCipher, proof: enclaveAttestation() };
+    } else {
+        return { sealedKey: newCipher, proof: generateZKProof(oldCipher, newCipher) };
+    }
+}
+```
+
+**Rule of Thumb:**  
+- On-chain = ownership + references + proof checks.  
+- Off-chain = heavy lifting (storage, encryption, inference, proof generation).  
