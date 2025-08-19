@@ -327,41 +327,59 @@ export default function INFTDashboard() {
       
       console.log('Token owner:', tokenOwner)
       
-      // Check specific addresses for authorization
-      const addressesToCheck = [
-        address,
-        tokenOwner,
-      ].filter(addr => addr) // Remove nulls/undefined
+      // Get ALL authorized users using authorizedUsersOf (same as Hardhat script)
+      console.log('Getting all authorized users...')
       
-      // Add your specific address if it's not already included
-      if (!addressesToCheck.find(addr => addr.toLowerCase() === '0x32f91e4e2c60a9c16cae736d3b42152b331c147f')) {
-        addressesToCheck.push('0x32F91E4E2c60A9C16cAE736D3b42152B331c147F')
+      let authorizedUsers = []
+      try {
+        authorizedUsers = await readContract(client, {
+          address: CONTRACT_ADDRESSES.INFT,
+          abi: INFT_ABI,
+          functionName: 'authorizedUsersOf',
+          args: [BigInt(authCheckForm.tokenId)],
+        })
+        
+        console.log('All authorized users from contract:', authorizedUsers)
+      } catch (error) {
+        console.error('Failed to get authorized users list:', error)
+        // Fall back to checking specific addresses
+        authorizedUsers = [address, tokenOwner].filter(addr => addr)
       }
       
-      // Remove duplicates by converting to lowercase for comparison
-      const uniqueAddresses = []
-      for (const addr of addressesToCheck) {
-        if (!uniqueAddresses.find(existing => existing.toLowerCase() === addr.toLowerCase())) {
-          uniqueAddresses.push(addr)
-        }
+      // Also include current user and token owner if not in the list
+      const allAddressesToCheck = [...authorizedUsers]
+      if (address && !allAddressesToCheck.find(addr => addr.toLowerCase() === address.toLowerCase())) {
+        allAddressesToCheck.push(address)
+      }
+      if (tokenOwner && !allAddressesToCheck.find(addr => addr.toLowerCase() === tokenOwner.toLowerCase())) {
+        allAddressesToCheck.push(tokenOwner)
       }
       
       const authResults = []
       
-      console.log('Addresses to check:', uniqueAddresses)
+      console.log('All addresses to process:', allAddressesToCheck)
       
-      for (const checkAddr of uniqueAddresses) {
+      for (const checkAddr of allAddressesToCheck) {
         try {
           console.log(`Checking authorization for: ${checkAddr}`)
           
-          const isAuthorized = await readContract(client, {
-            address: CONTRACT_ADDRESSES.INFT,
-            abi: INFT_ABI,
-            functionName: 'isAuthorized',
-            args: [BigInt(authCheckForm.tokenId), checkAddr],
-          })
+          // For addresses from authorizedUsersOf, they should be authorized
+          const isFromAuthorizedList = authorizedUsers.find(addr => addr.toLowerCase() === checkAddr.toLowerCase())
           
-          console.log(`${checkAddr} authorization result:`, isAuthorized)
+          let isAuthorized = false
+          if (isFromAuthorizedList) {
+            isAuthorized = true
+            console.log(`${checkAddr} is in authorized users list: true`)
+          } else {
+            // Double-check with isAuthorized function
+            isAuthorized = await readContract(client, {
+              address: CONTRACT_ADDRESSES.INFT,
+              abi: INFT_ABI,
+              functionName: 'isAuthorized',
+              args: [BigInt(authCheckForm.tokenId), checkAddr],
+            })
+            console.log(`${checkAddr} authorization result:`, isAuthorized)
+          }
           
           authResults.push({
             address: checkAddr,
@@ -371,7 +389,6 @@ export default function INFTDashboard() {
           })
         } catch (error) {
           console.error(`Failed to check authorization for ${checkAddr}:`, error)
-          // Still add the address to results with error info
           authResults.push({
             address: checkAddr,
             isAuthorized: false,
