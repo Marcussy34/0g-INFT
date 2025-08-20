@@ -303,15 +303,21 @@ class INFTOffChainService {
         fs.mkdirSync(tempDir, { recursive: true });
       }
       
-      const tempFilePath = path.join(tempDir, `downloaded_${rootHash.substring(2, 12)}.enc`);
+      const tempFilePath = path.join(tempDir, `downloaded_${rootHash.substring(2, 12)}_${Date.now()}.enc`);
+      
+      // Ensure the file doesn't exist (SDK requirement)
+      if (fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
       
       console.log(`⬇️ Downloading from 0G Storage to: ${tempFilePath}`);
       
       // Download the file using 0G Storage SDK
-      const [downloadResult, downloadErr] = await indexer.download(rootHash, tempFilePath, true);
-      
-      if (downloadErr) {
-        throw new Error(`0G Storage download failed: ${downloadErr}`);
+      try {
+        await indexer.download(rootHash, tempFilePath, true);
+        console.log('✅ Download completed successfully');
+      } catch (downloadError) {
+        throw new Error(`0G Storage download failed: ${downloadError instanceof Error ? downloadError.message : String(downloadError)}`);
       }
       
       console.log('✅ Successfully downloaded from 0G Storage');
@@ -330,7 +336,7 @@ class INFTOffChainService {
       return fileBuffer;
       
     } catch (error) {
-      console.error('❌ 0G Storage download failed:', error.message);
+      console.error('❌ 0G Storage download failed:', error instanceof Error ? error.message : String(error));
       console.log('⚠️ Falling back to local encrypted file');
       return this.loadLocalFallback();
     }
@@ -352,7 +358,7 @@ class INFTOffChainService {
       
       return available;
     } catch (error) {
-      console.log(`⚠️ File availability check failed: ${error.message}`);
+      console.log(`⚠️ File availability check failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }

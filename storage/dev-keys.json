@@ -1,13 +1,13 @@
 {
-  "encryptedURI": "0g://storage/0xe3bf3e775364d9eb24fe11106ad035bebda6c2b0f2b0586ad4397246c864aedc",
-  "storageRootHash": "0xe3bf3e775364d9eb24fe11106ad035bebda6c2b0f2b0586ad4397246c864aedc",
+  "encryptedURI": "0g://storage/0x564d46858f7d4e79361efec80361aabb3647f19f361f4a8413970fc04d4907ff",
+  "storageRootHash": "0x564d46858f7d4e79361efec80361aabb3647f19f361f4a8413970fc04d4907ff",
   "transactionHash": {
-    "txHash": "0x49b84b594d66addb24721e845986786bb29b3542248bac419d77f43a73998b16",
-    "rootHash": "0xe3bf3e775364d9eb24fe11106ad035bebda6c2b0f2b0586ad4397246c864aedc"
+    "txHash": "0x2a611c306df8341fa5c714d6dcd631f6391ab632bb63e1317db3ac6f71b062ea",
+    "rootHash": "0x564d46858f7d4e79361efec80361aabb3647f19f361f4a8413970fc04d4907ff"
   },
-  "metadataHash": "0xa43868e7e1335a6070b9ef4ec1c89a23050d73d3173f487557c56b51f2c34e3b",
-  "key": "0xa3741dcea555600155d33406b8e1b255f3916d728d2eb595bc6c80b4afcdec62",
-  "iv": "0xa64da9cbc7e6315ed3a4c048",
-  "tag": "0xc4d64ebeba23782c1d95d1579c017dc8",
-  "timestamp": "2025-08-19T13:28:57.872Z"
+  "metadataHash": "0xa69e2a2a1373d8e8e8cf407a78e88e55a061c756267f32c4528014ee61065547",
+  "key": "0x7ed61d665f2e4568eff5abf6d661b16236632f5d8f44f61211e41bafe2e2ad91",
+  "iv": "0x5adaddc22dadbb95a10c5cd6",
+  "tag": "0xeb27de60048661b0dd8f33ea9ba06550",
+  "timestamp": "2025-08-20T05:56:02.013Z"
 }

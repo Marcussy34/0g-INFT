@@ -41,14 +41,13 @@ async function testDownload() {
     console.log(`\n⬇️ Attempting to download file to: ${tempFile}`);
     console.log(`🔍 Download parameters: ${testRootHash}, ${tempFile}, true`);
     
-    const [downloadResult, downloadErr] = await indexer.download(testRootHash, tempFile, true);
-    
-    if (downloadErr) {
-      throw new Error(`Download failed: ${downloadErr}`);
+    try {
+      await indexer.download(testRootHash, tempFile, true);
+    } catch (downloadError) {
+      throw new Error(`Download failed: ${downloadError}`);
     }
     
     console.log('✅ Download completed successfully!');
-    console.log('📋 Download result:', downloadResult);
     
     // Verify file exists and get stats
     if (fs.existsSync(tempFile)) {
