@@ -200,7 +200,7 @@ class INFTOffChainService {
       console.log(`🎯 Processing inference request for token ${request.tokenId}`);
 
       // Step 1: Check authorization on-chain
-      const userAddress = request.user || '0x32F91E4E2c60A9C16cAE736D3b42152B331c147F'; // Default to owner for testing
+      const userAddress = request.user || process.env.DEFAULT_USER_ADDRESS || '0x32F91E4E2c60A9C16cAE736D3b42152B331c147F'; // Default to configured test address
       const isAuthorized = await this.checkAuthorization(request.tokenId, userAddress);
       
       if (!isAuthorized) {
@@ -276,27 +276,102 @@ class INFTOffChainService {
   }
 
   /**
-   * Fetch encrypted data from 0G Storage
-   * TODO: This needs to be implemented with the correct 0G Storage download API
+   * Fetch encrypted data from 0G Storage with comprehensive error handling
    */
   private async fetchFromStorage(rootHash: string): Promise<Buffer> {
     console.log(`📥 Fetching data from 0G Storage with root hash: ${rootHash}`);
     
-    // PLACEHOLDER: This is where we need the 0G Storage download functionality
-    // For now, we'll read the local encrypted file as a fallback
-    console.log('⚠️ Using local encrypted file as fallback (0G Storage download API needed)');
+    // First, check if file is available in the network
+    const fileAvailable = await this.checkFileAvailability(rootHash);
     
-    const encryptedFilePath = path.join(__dirname, '..', 'storage', 'quotes.enc');
-    if (!fs.existsSync(encryptedFilePath)) {
-      throw new Error('Encrypted file not found locally and 0G Storage download not implemented yet');
+    if (!fileAvailable) {
+      console.log('⚠️ File not available in 0G Storage network, using local fallback');
+      return this.loadLocalFallback();
     }
     
-    return fs.readFileSync(encryptedFilePath);
+    try {
+      // Get 0G Storage configuration
+      const indexerRpc = process.env.ZG_STORAGE_INDEXER || 'https://indexer-storage-testnet-turbo.0g.ai';
+      console.log('🔗 Using 0G Storage Indexer:', indexerRpc);
+      
+      // Initialize the 0G Storage Indexer
+      const indexer = new Indexer(indexerRpc);
+      
+      // Create temporary file path for download
+      const tempDir = path.join(__dirname, 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      
+      const tempFilePath = path.join(tempDir, `downloaded_${rootHash.substring(2, 12)}.enc`);
+      
+      console.log(`⬇️ Downloading from 0G Storage to: ${tempFilePath}`);
+      
+      // Download the file using 0G Storage SDK
+      const [downloadResult, downloadErr] = await indexer.download(rootHash, tempFilePath, true);
+      
+      if (downloadErr) {
+        throw new Error(`0G Storage download failed: ${downloadErr}`);
+      }
+      
+      console.log('✅ Successfully downloaded from 0G Storage');
+      
+      // Read the downloaded file into buffer
+      if (!fs.existsSync(tempFilePath)) {
+        throw new Error('Downloaded file not found after 0G Storage download');
+      }
+      
+      const fileBuffer = fs.readFileSync(tempFilePath);
+      
+      // Clean up temporary file
+      fs.unlinkSync(tempFilePath);
+      
+      console.log(`📦 File size: ${fileBuffer.length} bytes`);
+      return fileBuffer;
+      
+    } catch (error) {
+      console.error('❌ 0G Storage download failed:', error.message);
+      console.log('⚠️ Falling back to local encrypted file');
+      return this.loadLocalFallback();
+    }
+  }
+
+  /**
+   * Check if file is available in 0G Storage network
+   */
+  private async checkFileAvailability(rootHash: string): Promise<boolean> {
+    try {
+      const indexerRpc = process.env.ZG_STORAGE_INDEXER || 'https://indexer-storage-testnet-turbo.0g.ai';
+      const indexer = new Indexer(indexerRpc);
+      
+      console.log(`🔍 Checking file availability for: ${rootHash}`);
+      const locations = await indexer.getFileLocations(rootHash);
+      
+      const available = locations !== null && (Array.isArray(locations) ? locations.length > 0 : true);
+      console.log(`📍 File availability check: ${available ? '✅ Available' : '❌ Not available'}`);
+      
+      return available;
+    } catch (error) {
+      console.log(`⚠️ File availability check failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Load local fallback file for development/testing
+   */
+  private loadLocalFallback(): Buffer {
+    const encryptedFilePath = path.join(__dirname, '..', 'storage', 'quotes.enc');
     
-    // TODO: Replace with actual 0G Storage download:
-    // const indexer = new Indexer(process.env.ZG_STORAGE_INDEXER);
-    // const data = await indexer.download(rootHash);
-    // return data;
+    if (!fs.existsSync(encryptedFilePath)) {
+      throw new Error('Local fallback file not found. Please ensure storage/quotes.enc exists.');
+    }
+    
+    console.log('📁 Using local fallback file:', encryptedFilePath);
+    const buffer = fs.readFileSync(encryptedFilePath);
+    console.log(`📦 Local file size: ${buffer.length} bytes`);
+    
+    return buffer;
   }
 
   /**

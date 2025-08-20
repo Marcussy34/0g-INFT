@@ -7,7 +7,9 @@
     "start": "ts-node index.ts",
     "dev": "ts-node --watch index.ts",
     "build": "tsc",
-    "test": "curl -X POST http://localhost:3000/infer -H \"Content-Type: application/json\" -d '{\"tokenId\": 1, \"input\": \"test\"}'"
+    "test": "curl -X POST http://localhost:3000/infer -H \"Content-Type: application/json\" -d '{\"tokenId\": 1, \"input\": \"test\"}'",
+    "test-storage": "node test-0g-storage.js",
+    "test-inference": "curl -X POST http://localhost:3000/infer -H \"Content-Type: application/json\" -d '{\"tokenId\": 2, \"input\": \"inspire me\", \"user\": \"0x32F91E4E2c60A9C16cAE736D3b42152B331c147F\"}'"
   },
   "dependencies": {
     "@0glabs/0g-ts-sdk": "^0.3.1",
