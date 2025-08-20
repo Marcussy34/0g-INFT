@@ -1,3 +1,4 @@
+npx hardhat run scripts/check-and-authorize.ts --network galileo
 .exit
 ç
 çççç

@@ -39,11 +39,11 @@ function MyTokensList({ userAddress }) {
         setLoading(true)
         const tokens = []
         
-        // Check ownership of tokens 1 and 2 (since we know these exist)
-        // In a real app, you'd use events or a more efficient method
-        // Check tokens up to the current token ID
-        const maxTokenId = Math.max(3, 1) // Start from at least 1, check up to currentTokenId
-        for (let tokenId = 1; tokenId < maxTokenId; tokenId++) {
+        // Check ownership of tokens 1 through 10 (reasonable range for testing)
+        // In production, you'd use events or a more efficient method
+        console.log('Checking token ownership for tokens 1-10...')
+        
+        for (let tokenId = 1; tokenId <= 10; tokenId++) {
           try {
             const response = await fetch(`https://evmrpc-testnet.0g.ai`, {
               method: 'POST',
@@ -53,18 +53,25 @@ function MyTokensList({ userAddress }) {
                 id: 1,
                 method: 'eth_call',
                 params: [{
-                  to: '0xF170237160314f5D8526f981b251b56e25347Ed9',
+                  to: CONTRACT_ADDRESSES.INFT,
                   data: `0x6352211e${tokenId.toString(16).padStart(64, '0')}`  // ownerOf(uint256)
                 }, 'latest']
               })
             })
             
             const result = await response.json()
-            if (result.result && result.result !== '0x') {
+            
+            // Check if the call succeeded and returned an owner
+            if (result.result && result.result !== '0x' && !result.error) {
               const owner = '0x' + result.result.slice(-40)
+              console.log(`Token ${tokenId}: owner = ${owner}`)
               if (owner.toLowerCase() === userAddress.toLowerCase()) {
+                console.log(`✅ You own token ${tokenId}`)
                 tokens.push(tokenId)
               }
+            } else if (result.error) {
+              // Token doesn't exist (execution reverted)
+              console.log(`Token ${tokenId}: does not exist (${result.error.message})`)
             }
           } catch (error) {
             console.log(`Token ${tokenId} check failed:`, error)
@@ -92,7 +99,7 @@ function MyTokensList({ userAddress }) {
   
   return (
     <div className="space-y-2">
-      <p className="text-sm text-gray-600 mb-3">You own the following Token IDs:</p>
+      <p className="text-sm text-gray-600 mb-3">INFTs you own on the current contract:</p>
       <div className="flex flex-wrap gap-2">
         {ownedTokens.map(tokenId => (
           <div key={tokenId} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
@@ -131,6 +138,16 @@ export default function INFTDashboard() {
       chainName: chain?.name 
     })
   }, [address, isConnected, chain])
+
+  // Auto-populate transfer form with connected wallet address
+  useEffect(() => {
+    if (address && isConnected) {
+      setTransferForm(prev => ({
+        ...prev,
+        from: address
+      }))
+    }
+  }, [address, isConnected])
   
   const {
     currentTokenId,
@@ -180,6 +197,7 @@ export default function INFTDashboard() {
   })
   const [authCheckResults, setAuthCheckResults] = useState(null)
   const [isCheckingAuth, setIsCheckingAuth] = useState(false)
+  const [isTransferring, setIsTransferring] = useState(false)
 
   // Handle wallet connection
   const handleConnect = async () => {
@@ -287,10 +305,98 @@ export default function INFTDashboard() {
     })
   }
 
-  // Handle transfer (placeholder - requires TEE integration)
+  // Handle transfer with TEE mock integration
   const handleTransfer = async (e) => {
     e.preventDefault()
-    alert('Transfer functionality requires TEE attestation. This is a placeholder for the complete implementation.')
+    
+    // Validate form inputs
+    if (!transferForm.from || !transferForm.to || !transferForm.tokenId) {
+      alert('Please fill in all fields (from, to, tokenId)')
+      return
+    }
+
+    // Prevent transfer during pending operations
+    if (isTransferring) {
+      return
+    }
+
+    // Validate addresses format
+    const addressRegex = /^0x[a-fA-F0-9]{40}$/
+    if (!addressRegex.test(transferForm.from)) {
+      alert('Invalid from address format')
+      return
+    }
+    if (!addressRegex.test(transferForm.to)) {
+      alert('Invalid to address format') 
+      return
+    }
+
+    // Validate token ID
+    const tokenIdNum = parseInt(transferForm.tokenId)
+    if (isNaN(tokenIdNum) || tokenIdNum < 1) {
+      alert('Token ID must be a positive number')
+      return
+    }
+
+    try {
+      setIsTransferring(true)
+      console.log('🔄 Starting INFT transfer process...')
+      
+      // Step 1: Prepare transfer data via our API (TEE mock)
+      console.log('📡 Calling transfer API to generate TEE attestation and sealed key...')
+      const transferResponse = await fetch('/api/transfer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: transferForm.from,
+          to: transferForm.to,
+          tokenId: transferForm.tokenId,
+          originalKey: null // In production, would retrieve from secure storage
+        }),
+      })
+
+      if (!transferResponse.ok) {
+        const errorData = await transferResponse.json()
+        throw new Error(errorData.message || 'Failed to prepare transfer data')
+      }
+
+      const { transferData } = await transferResponse.json()
+      console.log('✅ Transfer data prepared:', {
+        tokenId: transferData.tokenId,
+        from: transferData.from,
+        to: transferData.to,
+        sealedKeyLength: transferData.sealedKey.length,
+        proofLength: transferData.proof.length
+      })
+
+      // Step 2: Execute blockchain transfer
+      console.log('⛓️  Executing blockchain transfer...')
+      await transferINFT(
+        transferData.from,
+        transferData.to, 
+        transferData.tokenId,
+        transferData.sealedKey,
+        transferData.proof
+      )
+
+      console.log('🎉 Transfer completed successfully!')
+      alert(`✅ INFT Token ${transferData.tokenId} transferred successfully from ${transferData.from} to ${transferData.to}!`)
+      
+      // Reset form
+      setTransferForm({
+        from: '',
+        to: '',
+        tokenId: '1'
+      })
+
+    } catch (error) {
+      console.error('❌ Transfer failed:', error)
+      alert(`Transfer failed: ${error.message}`)
+    } finally {
+      setIsTransferring(false)
+    }
   }
 
   // Authorization check using wagmi hooks (simple and reliable)
@@ -334,15 +440,36 @@ export default function INFTDashboard() {
         transport: http(),
       })
       
-      // Get token owner
-      const tokenOwner = await readContract(client, {
-        address: CONTRACT_ADDRESSES.INFT,
-        abi: INFT_ABI,
-        functionName: 'ownerOf',
-        args: [BigInt(authCheckForm.tokenId)],
-      })
-      
-      console.log('Token owner:', tokenOwner)
+      // Get token owner (with proper error handling for non-existent tokens)
+      let tokenOwner
+      try {
+        tokenOwner = await readContract(client, {
+          address: CONTRACT_ADDRESSES.INFT,
+          abi: INFT_ABI,
+          functionName: 'ownerOf',
+          args: [BigInt(authCheckForm.tokenId)],
+        })
+        console.log('Token owner:', tokenOwner)
+      } catch (error) {
+        // Check if this is the "token does not exist" error
+        if (error.message.includes('0x7e273289') || 
+            error.message.includes('ERC721NonexistentToken') ||
+            error.message.includes('ERC721: invalid token ID') ||
+            error.message.includes('nonexistent token')) {
+          
+          setAuthCheckResults({
+            tokenId: authCheckForm.tokenId,
+            error: `Token ID ${authCheckForm.tokenId} does not exist. This token has not been minted yet.`,
+            exists: false,
+            checkedAt: new Date().toLocaleTimeString()
+          })
+          setIsCheckingAuth(false)
+          return
+        }
+        
+        // Re-throw other errors
+        throw error
+      }
       
       // Get ALL authorized users using authorizedUsersOf (same as Hardhat script)
       console.log('Getting all authorized users...')
@@ -514,7 +641,7 @@ export default function INFTDashboard() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{currentTokenId?.toString() || '0'}</p>
-                  <p className="text-gray-600">Next Token ID</p>
+                  <p className="text-gray-600">Next Token to Mint</p>
                 </div>
               </div>
             </CardContent>
@@ -528,7 +655,7 @@ export default function INFTDashboard() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{userBalance?.toString() || '0'}</p>
-                  <p className="text-gray-600">My INFTs</p>
+                  <p className="text-gray-600">INFTs I Own</p>
                 </div>
               </div>
             </CardContent>
@@ -558,11 +685,21 @@ export default function INFTDashboard() {
                 My Token IDs
               </CardTitle>
               <CardDescription>
-                Tokens you own and can use for inference
+                INFTs you own on this contract and can use for AI inference
               </CardDescription>
             </CardHeader>
             <CardContent>
               <MyTokensList userAddress={address} />
+              {mounted && address && (
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs text-green-600">
+                    ✅ You can perform inference with any of these tokens
+                  </p>
+                  <p className="text-xs text-amber-600">
+                    ℹ️ Contract updated: Only showing tokens from the current deployment
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -747,7 +884,7 @@ export default function INFTDashboard() {
                 Transfer INFT
               </CardTitle>
               <CardDescription>
-                Transfer ownership with TEE attestation (requires TEE setup)
+                Transfer ownership with TEE attestation (TEE mock implementation)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -779,8 +916,8 @@ export default function INFTDashboard() {
                     placeholder="1"
                   />
                 </div>
-                <Button type="submit" className="w-full" variant="outline">
-                  Transfer (Placeholder)
+                <Button type="submit" className="w-full" variant="outline" disabled={isTransferring}>
+                  {isTransferring ? 'Transferring...' : 'Transfer INFT'}
                 </Button>
               </form>
             </CardContent>
@@ -831,7 +968,20 @@ export default function INFTDashboard() {
                       Authorization Status for Token #{authCheckResults.tokenId}
                     </h4>
                     
-                    {authCheckResults.tokenOwner && (
+                    {authCheckResults.error ? (
+                      <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm font-medium text-red-700">❌ Error:</p>
+                        <p className="text-sm text-red-600 mt-1">{authCheckResults.error}</p>
+                        {authCheckResults.exists === false && (
+                          <p className="text-xs text-red-500 mt-2">
+                            💡 Tip: Try minting a new token or check a different token ID that exists.
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2">
+                          ⏰ Checked at {authCheckResults.checkedAt}
+                        </p>
+                      </div>
+                    ) : authCheckResults.tokenOwner && (
                       <div className="mb-4 p-3 bg-blue-50 rounded-lg">
                         <p className="text-sm font-medium text-blue-700">👑 Token Owner:</p>
                         <p className="text-sm text-blue-600 font-mono break-all">
@@ -840,19 +990,21 @@ export default function INFTDashboard() {
                       </div>
                     )}
 
-                    <div className="space-y-2">
-                      <p className="font-medium text-gray-700">Authorization Status:</p>
-                      <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded mb-3">
-                        💡 <strong>Note:</strong> Token owners must explicitly authorize themselves for inference access.
-                      </div>
-                      {authCheckResults.authorizations.length === 0 ? (
-                        <p className="text-gray-500 text-sm">No addresses checked</p>
-                      ) : (
+                    {!authCheckResults.error && (
+                      <>
                         <div className="space-y-2">
-                          {authCheckResults.authorizations.map((auth, index) => (
-                            <div
-                              key={index}
-                              className={`p-3 rounded-lg border ${
+                          <p className="font-medium text-gray-700">Authorization Status:</p>
+                          <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded mb-3">
+                            💡 <strong>Note:</strong> Token owners must explicitly authorize themselves for inference access.
+                          </div>
+                          {!authCheckResults.authorizations || authCheckResults.authorizations.length === 0 ? (
+                            <p className="text-gray-500 text-sm">No addresses checked</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {authCheckResults.authorizations.map((auth, index) => (
+                                <div
+                                  key={index}
+                                  className={`p-3 rounded-lg border ${
                                 auth.isAuthorized 
                                   ? 'bg-green-50 border-green-200' 
                                   : 'bg-gray-50 border-gray-200'
@@ -887,12 +1039,14 @@ export default function INFTDashboard() {
                             </div>
                           ))}
                         </div>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-gray-500 mt-3">
-                      ⏰ Checked at {authCheckResults.checkedAt}
-                    </p>
+                          )}
+                          
+                          <p className="text-xs text-gray-500 mt-3">
+                            ⏰ Checked at {authCheckResults.checkedAt}
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

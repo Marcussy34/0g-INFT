@@ -23,8 +23,8 @@ export const ZERO_G_NETWORK = {
 
 // Contract Addresses from deployments/galileo.json
 export const CONTRACT_ADDRESSES = {
-  INFT: '0xF170237160314f5D8526f981b251b56e25347Ed9',
-  DATA_VERIFIER: '0x9C3FFe10e61B1750F61D2E0A64c6bBE8984BA268',
+  INFT: '0x67dDE9dF36Eb6725f265bc8A1908628e8d4AF9DA',
+  DATA_VERIFIER: '0xc13C532A60467c66bf0FFbeF52cD851bF1bC7fC6',
   ORACLE_STUB: '0x567e70a52AB420c525D277b0020260a727A735dB',
 }
 
@@ -86,6 +86,19 @@ export const INFT_ABI = [
     "name": "balanceOf",
     "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "from", "type": "address"},
+      {"internalType": "address", "name": "to", "type": "address"},
+      {"internalType": "uint256", "name": "tokenId", "type": "uint256"},
+      {"internalType": "string", "name": "sealedKey", "type": "string"},
+      {"internalType": "bytes", "name": "proof", "type": "bytes"}
+    ],
+    "name": "transfer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

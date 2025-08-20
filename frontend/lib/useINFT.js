@@ -1,5 +1,5 @@
-import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
-import { parseEther, isAddress } from 'viem'
+import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt, useConfig } from 'wagmi'
+import { parseEther, isAddress, waitForTransactionReceipt } from 'viem'
 import { CONTRACT_ADDRESSES, INFT_ABI, OFFCHAIN_SERVICE_URL } from './constants'
 
 /**
@@ -8,6 +8,7 @@ import { CONTRACT_ADDRESSES, INFT_ABI, OFFCHAIN_SERVICE_URL } from './constants'
  */
 export function useINFT() {
   const { address: account, chain } = useAccount()
+  const config = useConfig()
   const { writeContract, data: hash, isPending: isWritePending, error: writeError } = useWriteContract()
   
   // Wait for transaction confirmation
@@ -106,15 +107,43 @@ export function useINFT() {
     }
     
     try {
-      await writeContract({
+      console.log('📤 Submitting transfer transaction...')
+      const txHash = await writeContract({
         address: CONTRACT_ADDRESSES.INFT,
         abi: INFT_ABI,
         functionName: 'transfer',
         args: [from, to, BigInt(tokenId), sealedKey, proof],
       })
+      
+      console.log('⏳ Transaction submitted, waiting for confirmation...', txHash)
+      
+      // Wait for transaction confirmation
+      const receipt = await waitForTransactionReceipt(config, {
+        hash: txHash,
+        timeout: 60000, // 60 second timeout
+      })
+      
+      if (receipt.status === 'reverted') {
+        throw new Error(`Transaction failed: ${receipt.transactionHash}`)
+      }
+      
+      console.log('✅ Transaction confirmed:', receipt.transactionHash)
+      return receipt
+      
     } catch (error) {
       console.error('Transfer error:', error)
-      throw error
+      // Extract meaningful error message
+      const errorMessage = error.message || error.toString()
+      
+      if (errorMessage.includes('User denied') || errorMessage.includes('rejected')) {
+        throw new Error('Transaction was rejected by user')
+      } else if (errorMessage.includes('insufficient funds')) {
+        throw new Error('Insufficient funds for transaction')
+      } else if (errorMessage.includes('execution reverted')) {
+        throw new Error('Transaction failed during execution - check oracle and contract state')
+      } else {
+        throw new Error(`Transfer failed: ${errorMessage}`)
+      }
     }
   }
 
