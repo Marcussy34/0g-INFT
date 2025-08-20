@@ -59,10 +59,13 @@ function generateTEEAttestationProof(tokenId, from, to, sealedKey, originalEncry
     .digest('hex');
   
   // Create final proof payload
+  // Create a more compact proof payload for gas optimization
   const proofPayload = {
-    attestation: attestationData,
-    attestationHash: '0x' + attestationHash,
-    proofType: 'TEE_ATTESTATION_STUB'
+    v: '1.0', // version shortened
+    type: 'TEE_STUB', // type shortened
+    ts: Date.now(), // timestamp as number
+    hash: attestationHash, // just hash without 0x prefix
+    sig: attestationData.signature.signature.slice(-32) // shortened signature
   };
   
   const proofHex = '0x' + Buffer.from(JSON.stringify(proofPayload)).toString('hex');
@@ -82,22 +85,12 @@ function generateTEEAttestationProof(tokenId, from, to, sealedKey, originalEncry
 function generateSealedKey(tokenId, newOwner, originalKey) {
   console.log('🔐 Generating sealed key for new owner (simulated re-encryption)...');
   
-  // Simulate re-encryption process
+  // Create compact re-encryption data for gas optimization
   const reEncryptionData = {
-    tokenId,
-    newOwner,
-    timestamp: new Date().toISOString(),
-    originalKeyHash: originalKey ? 
-      crypto.createHash('sha256').update(originalKey).digest('hex') : 
-      'simulated_original_key',
-    
-    // Simulated re-encrypted key (in reality, this would be the original key
-    // re-encrypted with the new owner's public key)
-    reEncryptedKey: crypto.randomBytes(32).toString('hex'),
-    
-    // Re-encryption metadata
-    algorithm: 'AES-256-GCM',
-    keyDerivation: 'HKDF-SHA256',
+    id: tokenId,
+    to: newOwner,
+    ts: Date.now(),
+    key: crypto.randomBytes(32).toString('hex'),
     nonce: crypto.randomBytes(12).toString('hex')
   };
   
@@ -178,7 +171,7 @@ export default async function handler(req, res) {
           jsonrpc: '2.0',
           method: 'eth_call',
           params: [{
-            to: '0x67dDE9dF36Eb6725f265bc8A1908628e8d4AF9DA', // INFT contract
+            to: '0x18db2ED477A25Aac615D803aE7be1d3598cdfF95', // Fixed INFT contract
             data: '0x6352211e' + tokenIdNum.toString(16).padStart(64, '0') // ownerOf(tokenId)
           }, 'latest'],
           id: 1

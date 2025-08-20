@@ -108,7 +108,7 @@ class INFTOffChainService {
    */
   private initializeBlockchain(): void {
     const rpcUrl = process.env.GALILEO_RPC_URL || 'https://evmrpc-testnet.0g.ai';
-    const inftAddress = process.env.INFT_CONTRACT_ADDRESS || '0x67dDE9dF36Eb6725f265bc8A1908628e8d4AF9DA';
+    const inftAddress = process.env.INFT_CONTRACT_ADDRESS || '0x18db2ED477A25Aac615D803aE7be1d3598cdfF95';
     const oracleAddress = process.env.ORACLE_CONTRACT_ADDRESS || '0x567e70a52AB420c525D277b0020260a727A735dB';
 
     this.provider = new JsonRpcProvider(rpcUrl);

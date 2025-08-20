@@ -3,4 +3,5 @@
 /* eslint-disable */
 export * as interfaces from "./interfaces";
 export { INFT__factory } from "./INFT__factory";
+export { INFTFixed__factory } from "./INFTFixed__factory";
 export { OracleStub__factory } from "./OracleStub__factory";

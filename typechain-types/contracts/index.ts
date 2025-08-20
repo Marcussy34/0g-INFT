@@ -4,4 +4,5 @@
 import type * as interfaces from "./interfaces";
 export type { interfaces };
 export type { INFT } from "./INFT";
+export type { INFTFixed } from "./INFTFixed";
 export type { OracleStub } from "./OracleStub";

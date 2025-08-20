@@ -21,11 +21,11 @@ export const ZERO_G_NETWORK = {
   testnet: true,
 }
 
-// Contract Addresses from deployments/galileo.json
+// Contract Addresses - Using Fixed Implementation
 export const CONTRACT_ADDRESSES = {
-  INFT: '0x67dDE9dF36Eb6725f265bc8A1908628e8d4AF9DA',
-  DATA_VERIFIER: '0xc13C532A60467c66bf0FFbeF52cD851bF1bC7fC6',
-  ORACLE_STUB: '0x567e70a52AB420c525D277b0020260a727A735dB',
+  INFT: '0x18db2ED477A25Aac615D803aE7be1d3598cdfF95', // Fixed INFT with custom errors
+  DATA_VERIFIER: '0x730892959De01BcB6465C68aA74dCdC782af518B', // Fixed DataVerifier with error bubbling
+  ORACLE_STUB: '0x567e70a52AB420c525D277b0020260a727A735dB', // Same oracle
 }
 
 // Off-chain service configuration
@@ -93,7 +93,7 @@ export const INFT_ABI = [
       {"internalType": "address", "name": "from", "type": "address"},
       {"internalType": "address", "name": "to", "type": "address"},
       {"internalType": "uint256", "name": "tokenId", "type": "uint256"},
-      {"internalType": "string", "name": "sealedKey", "type": "string"},
+      {"internalType": "bytes", "name": "sealedKey", "type": "bytes"},
       {"internalType": "bytes", "name": "proof", "type": "bytes"}
     ],
     "name": "transfer",

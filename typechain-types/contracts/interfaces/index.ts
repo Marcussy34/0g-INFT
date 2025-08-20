@@ -3,4 +3,6 @@
 /* eslint-disable */
 import type * as iDataVerifierAdapterSol from "./IDataVerifierAdapter.sol";
 export type { iDataVerifierAdapterSol };
+import type * as iDataVerifierAdapterFixedSol from "./IDataVerifierAdapterFixed.sol";
+export type { iDataVerifierAdapterFixedSol };
 export type { IOracle } from "./IOracle";

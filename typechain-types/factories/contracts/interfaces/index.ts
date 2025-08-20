@@ -2,4 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as iDataVerifierAdapterSol from "./IDataVerifierAdapter.sol";
+export * as iDataVerifierAdapterFixedSol from "./IDataVerifierAdapterFixed.sol";
 export { IOracle__factory } from "./IOracle__factory";

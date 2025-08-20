@@ -70,9 +70,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.INFT__factory>;
     getContractFactory(
+      name: "INFTFixed",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.INFTFixed__factory>;
+    getContractFactory(
       name: "DataVerifierAdapter",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.DataVerifierAdapter__factory>;
+    getContractFactory(
+      name: "IDataVerifierAdapter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDataVerifierAdapter__factory>;
+    getContractFactory(
+      name: "DataVerifierAdapterFixed",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DataVerifierAdapterFixed__factory>;
     getContractFactory(
       name: "IDataVerifierAdapter",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -157,10 +169,25 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.INFT>;
     getContractAt(
+      name: "INFTFixed",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.INFTFixed>;
+    getContractAt(
       name: "DataVerifierAdapter",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.DataVerifierAdapter>;
+    getContractAt(
+      name: "IDataVerifierAdapter",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDataVerifierAdapter>;
+    getContractAt(
+      name: "DataVerifierAdapterFixed",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DataVerifierAdapterFixed>;
     getContractAt(
       name: "IDataVerifierAdapter",
       address: string | ethers.Addressable,
@@ -234,9 +261,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.INFT>;
     deployContract(
+      name: "INFTFixed",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.INFTFixed>;
+    deployContract(
       name: "DataVerifierAdapter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.DataVerifierAdapter>;
+    deployContract(
+      name: "IDataVerifierAdapter",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDataVerifierAdapter>;
+    deployContract(
+      name: "DataVerifierAdapterFixed",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DataVerifierAdapterFixed>;
     deployContract(
       name: "IDataVerifierAdapter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -321,10 +360,25 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.INFT>;
     deployContract(
+      name: "INFTFixed",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.INFTFixed>;
+    deployContract(
       name: "DataVerifierAdapter",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.DataVerifierAdapter>;
+    deployContract(
+      name: "IDataVerifierAdapter",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDataVerifierAdapter>;
+    deployContract(
+      name: "DataVerifierAdapterFixed",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DataVerifierAdapterFixed>;
     deployContract(
       name: "IDataVerifierAdapter",
       args: any[],

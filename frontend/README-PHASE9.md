@@ -57,9 +57,9 @@ frontend/
 
 ## Contract Integration
 
-### Deployed Contracts (0G Galileo Testnet)
-- **INFT Contract**: `0xF170237160314f5D8526f981b251b56e25347Ed9`
-- **DataVerifierAdapter**: `0x9C3FFe10e61B1750F61D2E0A64c6bBE8984BA268`
+### Deployed Contracts (0G Galileo Testnet) - Fixed Implementation
+- **INFT Contract (Fixed)**: `0x18db2ED477A25Aac615D803aE7be1d3598cdfF95`
+- **DataVerifierAdapter (Fixed)**: `0x730892959De01BcB6465C68aA74dCdC782af518B`
 - **OracleStub**: `0x567e70a52AB420c525D277b0020260a727A735dB`
 
 ### Supported Functions

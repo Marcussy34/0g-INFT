@@ -1,5 +1,6 @@
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt, useConfig } from 'wagmi'
-import { parseEther, isAddress, waitForTransactionReceipt } from 'viem'
+import { parseEther, isAddress } from 'viem'
+import { waitForTransactionReceipt, writeContract as writeContractAction } from 'wagmi/actions'
 import { CONTRACT_ADDRESSES, INFT_ABI, OFFCHAIN_SERVICE_URL } from './constants'
 
 /**
@@ -108,19 +109,22 @@ export function useINFT() {
     
     try {
       console.log('📤 Submitting transfer transaction...')
-      const txHash = await writeContract({
+      
+      // Submit the transaction and get hash using wagmi action
+      const txHash = await writeContractAction(config, {
         address: CONTRACT_ADDRESSES.INFT,
         abi: INFT_ABI,
         functionName: 'transfer',
         args: [from, to, BigInt(tokenId), sealedKey, proof],
+        gas: 150000, // Optimized gas limit based on fixed implementation (113K + buffer)
       })
       
       console.log('⏳ Transaction submitted, waiting for confirmation...', txHash)
       
-      // Wait for transaction confirmation
+      // Wait for transaction confirmation using the returned hash
       const receipt = await waitForTransactionReceipt(config, {
         hash: txHash,
-        timeout: 60000, // 60 second timeout
+        timeout: 180000, // 3 minute timeout for complex verification
       })
       
       if (receipt.status === 'reverted') {
@@ -139,8 +143,8 @@ export function useINFT() {
         throw new Error('Transaction was rejected by user')
       } else if (errorMessage.includes('insufficient funds')) {
         throw new Error('Insufficient funds for transaction')
-      } else if (errorMessage.includes('execution reverted')) {
-        throw new Error('Transaction failed during execution - check oracle and contract state')
+      } else if (errorMessage.includes('execution reverted') || errorMessage.includes('out of gas')) {
+        throw new Error('Transaction failed during execution - may need higher gas limit or check contract state')
       } else {
         throw new Error(`Transfer failed: ${errorMessage}`)
       }

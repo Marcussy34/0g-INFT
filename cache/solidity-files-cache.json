@@ -760,6 +760,86 @@
       "artifacts": [
         "IERC721Receiver"
       ]
+    },
+    "/Users/marcus/Projects/0g-INFT/contracts/INFTFixed.sol": {
+      "lastModificationDate": 1755702849484,
+      "contentHash": "e9d54a481b19f9e5e0652a61da3c2692",
+      "sourceName": "contracts/INFTFixed.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC721/ERC721.sol",
+        "@openzeppelin/contracts/access/Ownable.sol",
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "./interfaces/IDataVerifierAdapter.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "INFTFixed"
+      ]
+    },
+    "/Users/marcus/Projects/0g-INFT/contracts/interfaces/IDataVerifierAdapterFixed.sol": {
+      "lastModificationDate": 1755702819737,
+      "contentHash": "5292bb08ed62b4b7fe9baf990e09692f",
+      "sourceName": "contracts/interfaces/IDataVerifierAdapterFixed.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./IOracle.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "DataVerifierAdapterFixed",
+        "IDataVerifierAdapter"
+      ]
     }
   }
 }
