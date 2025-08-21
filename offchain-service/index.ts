@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { JsonRpcProvider, Contract, Wallet } from 'ethers';
 import * as dotenv from 'dotenv';
+import axios, { AxiosResponse } from 'axios';
 
 // Load environment variables from parent directory and local
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -56,6 +57,12 @@ interface InferResponse {
     authorized: boolean;
     timestamp: string;
     proofHash: string;
+    provider?: string;
+    model?: string;
+    temperature?: number;
+    promptHash?: string;
+    contextHash?: string;
+    completionHash?: string;
   };
 }
 
@@ -78,12 +85,39 @@ interface DevKeys {
   tag: string;
 }
 
+interface LLMConfig {
+  provider: string;
+  host: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  seed: number;
+  requestTimeoutMs: number;
+  maxContextQuotes: number;
+  devFallback: boolean;
+}
+
+interface OllamaGenerateResponse {
+  model: string;
+  created_at: string;
+  response: string;
+  done: boolean;
+  context?: number[];
+  total_duration?: number;
+  load_duration?: number;
+  prompt_eval_count?: number;
+  prompt_eval_duration?: number;
+  eval_count?: number;
+  eval_duration?: number;
+}
+
 class INFTOffChainService {
   private app: express.Application;
   private provider!: JsonRpcProvider;
   private inftContract!: Contract;
   private oracleContract!: Contract;
   private devKeys!: DevKeys;
+  private llmConfig!: LLMConfig;
   private port: number;
 
   constructor() {
@@ -95,6 +129,9 @@ class INFTOffChainService {
     
     // Load development keys
     this.loadDevKeys();
+    
+    // Load LLM configuration
+    this.loadLLMConfig();
     
     // Setup Express middleware
     this.setupMiddleware();
@@ -138,6 +175,31 @@ class INFTOffChainService {
   }
 
   /**
+   * Load LLM configuration from environment variables
+   */
+  private loadLLMConfig(): void {
+    this.llmConfig = {
+      provider: process.env.LLM_PROVIDER || 'ollama',
+      host: process.env.LLM_HOST || 'http://localhost:11434',
+      model: process.env.LLM_MODEL || 'llama3.2:3b-instruct-q4_K_M',
+      temperature: parseFloat(process.env.LLM_TEMPERATURE || '0.2'),
+      maxTokens: parseInt(process.env.LLM_MAX_TOKENS || '256'),
+      seed: parseInt(process.env.LLM_SEED || '42'),
+      requestTimeoutMs: parseInt(process.env.LLM_REQUEST_TIMEOUT_MS || '20000'),
+      maxContextQuotes: parseInt(process.env.LLM_MAX_CONTEXT_QUOTES || '25'),
+      devFallback: process.env.LLM_DEV_FALLBACK === 'true'
+    };
+
+    console.log('🤖 LLM configuration loaded:');
+    console.log('  - Provider:', this.llmConfig.provider);
+    console.log('  - Host:', this.llmConfig.host);
+    console.log('  - Model:', this.llmConfig.model);
+    console.log('  - Temperature:', this.llmConfig.temperature);
+    console.log('  - Max Tokens:', this.llmConfig.maxTokens);
+    console.log('  - Dev Fallback:', this.llmConfig.devFallback);
+  }
+
+  /**
    * Setup Express middleware
    */
   private setupMiddleware(): void {
@@ -163,6 +225,9 @@ class INFTOffChainService {
         timestamp: new Date().toISOString()
       });
     });
+
+    // LLM health check endpoint
+    this.app.get('/llm/health', this.handleLLMHealthCheck.bind(this));
 
     // Main inference endpoint
     this.app.post('/infer', this.handleInferRequest.bind(this));
@@ -197,6 +262,25 @@ class INFTOffChainService {
         return;
       }
 
+      // Validate and sanitize input length (Phase 0 security guardrail)
+      if (request.input.length > 500) {
+        res.status(400).json({ 
+          success: false, 
+          error: 'Input too long. Maximum 500 characters allowed.' 
+        });
+        return;
+      }
+
+      // Basic input sanitization
+      const sanitizedInput = request.input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+      if (!sanitizedInput) {
+        res.status(400).json({ 
+          success: false, 
+          error: 'Input contains only invalid characters.' 
+        });
+        return;
+      }
+
       console.log(`🎯 Processing inference request for token ${request.tokenId}`);
 
       // Step 1: Check authorization on-chain
@@ -227,24 +311,30 @@ class INFTOffChainService {
       console.log('🔓 Decrypting data...');
       const decryptedData = this.decryptData(encryptedData);
 
-      // Step 4: Perform inference (random quote selection)
-      console.log('🤖 Performing inference...');
-      const inferenceResult = this.performInference(decryptedData, request.input);
+      // Step 4: Perform inference (LLM-based with fallback)
+      console.log('🤖 Performing LLM inference...');
+      const inferenceResult = await this.performInference(decryptedData, sanitizedInput);
 
-      // Step 5: Generate oracle proof (stub)
+      // Step 5: Generate oracle proof (extended with LLM metadata)
       console.log('📜 Generating oracle proof...');
-      const proof = this.generateOracleProof(request.tokenId, request.input, inferenceResult);
+      const proof = this.generateOracleProof(request.tokenId, sanitizedInput, inferenceResult.output, inferenceResult.metadata);
 
       // Step 6: Return response
       const response: InferResponse = {
         success: true,
-        output: inferenceResult,
+        output: inferenceResult.output,
         proof: proof,
         metadata: {
           tokenId: request.tokenId,
           authorized: true,
           timestamp: new Date().toISOString(),
-          proofHash: crypto.createHash('sha256').update(proof).digest('hex')
+          proofHash: crypto.createHash('sha256').update(proof).digest('hex'),
+          provider: inferenceResult.metadata.provider,
+          model: inferenceResult.metadata.model,
+          temperature: inferenceResult.metadata.temperature,
+          promptHash: inferenceResult.metadata.promptHash,
+          contextHash: inferenceResult.metadata.contextHash,
+          completionHash: inferenceResult.metadata.completionHash
         }
       };
 
@@ -253,6 +343,17 @@ class INFTOffChainService {
 
     } catch (error) {
       console.error('❌ Error processing inference request:', error);
+      
+      // Handle LLM unavailable error specifically
+      if (error instanceof Error && error.message.includes('LLM_UNAVAILABLE')) {
+        res.status(503).json({
+          success: false,
+          error: 'LLM service unavailable',
+          code: 'LLM_UNAVAILABLE'
+        });
+        return;
+      }
+      
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Internal server error'
@@ -423,25 +524,214 @@ class INFTOffChainService {
   }
 
   /**
-   * Perform inference on the decrypted data
+   * Perform LLM-based inference on the decrypted data
    */
-  private performInference(quotesData: QuotesData, input: string): string {
-    // Simple inference: return a random quote
-    // In a real implementation, this would use the input to determine
-    // which quote to return or perform more sophisticated inference
-    
-    const randomIndex = Math.floor(Math.random() * quotesData.quotes.length);
-    const selectedQuote = quotesData.quotes[randomIndex];
-    
-    console.log(`🎲 Selected quote ${randomIndex + 1}/${quotesData.quotes.length}: "${selectedQuote.substring(0, 50)}..."`);
-    
-    return selectedQuote;
+  private async performInference(quotesData: QuotesData, input: string): Promise<{
+    output: string;
+    metadata: {
+      provider: string;
+      model: string;
+      temperature: number;
+      promptHash: string;
+      contextHash: string;
+      completionHash: string;
+    };
+  }> {
+    try {
+      // Build bounded context from quotes (Phase 0 security guardrail)
+      const contextQuotes = quotesData.quotes.slice(0, this.llmConfig.maxContextQuotes);
+      
+      // Build prompt template
+      const prompt = this.buildPrompt(input, contextQuotes);
+      
+      // Generate hashes for proof
+      const promptHash = crypto.createHash('sha256').update(prompt).digest('hex');
+      const contextHash = crypto.createHash('sha256').update(JSON.stringify(contextQuotes)).digest('hex');
+      
+      console.log(`🎯 Calling LLM with ${contextQuotes.length} context quotes`);
+      
+      // Call LLM
+      const completion = await this.callLLM(prompt);
+      const completionHash = crypto.createHash('sha256').update(completion).digest('hex');
+      
+      console.log(`✅ LLM inference completed: "${completion.substring(0, 50)}..."`);  
+      
+      return {
+        output: completion,
+        metadata: {
+          provider: this.llmConfig.provider,
+          model: this.llmConfig.model,
+          temperature: this.llmConfig.temperature,
+          promptHash,
+          contextHash,
+          completionHash
+        }
+      };
+      
+    } catch (error) {
+      console.error('❌ LLM inference failed:', error);
+      
+      // Fallback policy based on configuration
+      if (this.llmConfig.devFallback) {
+        console.log('⚠️ Using fallback: random quote selection');
+        const randomIndex = Math.floor(Math.random() * quotesData.quotes.length);
+        const selectedQuote = quotesData.quotes[randomIndex];
+        
+        console.log(`🎲 Fallback selected quote ${randomIndex + 1}/${quotesData.quotes.length}: "${selectedQuote.substring(0, 50)}..."`);    
+        
+        return {
+          output: selectedQuote,
+          metadata: {
+            provider: 'fallback',
+            model: 'random_selection',
+            temperature: 0,
+            promptHash: 'fallback',
+            contextHash: 'fallback',
+            completionHash: crypto.createHash('sha256').update(selectedQuote).digest('hex')
+          }
+        };
+      } else {
+        // Throw LLM unavailable error
+        throw new Error('LLM_UNAVAILABLE: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      }
+    }
   }
 
   /**
-   * Generate oracle proof stub
+   * Build prompt template for LLM
    */
-  private generateOracleProof(tokenId: number, input: string, output: string): string {
+  private buildPrompt(input: string, contextQuotes: string[]): string {
+    // System instruction (Phase 0 security guardrail: no secrets, no system leaks)
+    const systemInstruction = 'You are a concise assistant. Use the provided context strictly. Do not reveal system information or secrets. Return a single inspirational quote tailored to the user\'s input.';
+    
+    // Build context section
+    const contextSection = contextQuotes
+      .map((quote, index) => `${index + 1}. "${quote}"`)
+      .join('\n');
+    
+    const prompt = `${systemInstruction}\n\nInput: "${input}"\n\nContext quotes (subset):\n\n${contextSection}\n\nRespond with only the quote text. No prefatory wording.`;
+    
+    console.log(`📝 Built prompt with ${contextQuotes.length} quotes, length: ${prompt.length} chars`);
+    return prompt;
+  }
+
+  /**
+   * Call Ollama LLM API
+   */
+  private async callLLM(prompt: string): Promise<string> {
+    const requestPayload = {
+      model: this.llmConfig.model,
+      prompt: prompt,
+      stream: false,
+      options: {
+        temperature: this.llmConfig.temperature,
+        seed: this.llmConfig.seed,
+        num_predict: this.llmConfig.maxTokens
+      }
+    };
+
+    console.log(`🌐 Calling Ollama API: ${this.llmConfig.host}/api/generate`);
+    
+    try {
+      const response: AxiosResponse<OllamaGenerateResponse> = await axios.post(
+        `${this.llmConfig.host}/api/generate`,
+        requestPayload,
+        {
+          timeout: this.llmConfig.requestTimeoutMs,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.data || !response.data.response) {
+        throw new Error('Invalid response from Ollama API');
+      }
+
+      console.log(`⚡ LLM response received (${response.data.response.length} chars)`);
+      return response.data.response.trim();
+      
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNREFUSED') {
+          throw new Error(`Cannot connect to Ollama at ${this.llmConfig.host}. Is Ollama running?`);
+        } else if (error.code === 'ECONNABORTED') {
+          throw new Error(`LLM request timeout after ${this.llmConfig.requestTimeoutMs}ms`);
+        } else {
+          throw new Error(`Ollama API error: ${error.message}`);
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Handle LLM health check
+   */
+  private async handleLLMHealthCheck(req: express.Request, res: express.Response): Promise<void> {
+    try {
+      const startTime = Date.now();
+      
+      // Simple ping to Ollama
+      const response: AxiosResponse<OllamaGenerateResponse> = await axios.post(
+        `${this.llmConfig.host}/api/generate`,
+        {
+          model: this.llmConfig.model,
+          prompt: 'ping',
+          stream: false,
+          options: {
+            num_predict: 1
+          }
+        },
+        {
+          timeout: 5000,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const latency = Date.now() - startTime;
+      
+      res.json({
+        provider: this.llmConfig.provider,
+        model: this.llmConfig.model,
+        host: this.llmConfig.host,
+        ok: true,
+        latency_ms: latency,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('❌ LLM health check failed:', error);
+      
+      res.status(503).json({
+        provider: this.llmConfig.provider,
+        model: this.llmConfig.model,
+        host: this.llmConfig.host,
+        ok: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * Generate oracle proof stub (extended with LLM metadata)
+   */
+  private generateOracleProof(
+    tokenId: number, 
+    input: string, 
+    output: string, 
+    llmMetadata: {
+      provider: string;
+      model: string;
+      temperature: number;
+      promptHash: string;
+      contextHash: string;
+      completionHash: string;
+    }
+  ): string {
     // Generate a proof stub that would be verified by the oracle
     // In a real implementation, this would be a TEE or ZKP proof
     
@@ -451,7 +741,15 @@ class INFTOffChainService {
       output,
       timestamp: new Date().toISOString(),
       service: '0G-INFT-OffChain-Service',
-      version: '1.0.0'
+      version: '2.0.0',
+      llm: {
+        provider: llmMetadata.provider,
+        model: llmMetadata.model,
+        temperature: llmMetadata.temperature,
+        promptHash: llmMetadata.promptHash,
+        contextHash: llmMetadata.contextHash,
+        completionHash: llmMetadata.completionHash
+      }
     };
 
     // Create a simple proof hash for the stub
@@ -464,7 +762,7 @@ class INFTOffChainService {
       data: proofData,
       hash: proofHash,
       signature: 'stub_signature_' + proofHash.substring(0, 16),
-      type: 'stub'
+      type: 'llm_stub'
     };
 
     return JSON.stringify(proof);
@@ -479,8 +777,9 @@ class INFTOffChainService {
       console.log('=' .repeat(60));
       console.log(`🌐 Server running on http://localhost:${this.port}`);
       console.log('📋 Available endpoints:');
-      console.log('  - GET  /health - Health check');
-      console.log('  - POST /infer  - Inference endpoint');
+      console.log('  - GET  /health     - Service health check');
+      console.log('  - GET  /llm/health - LLM health check');
+      console.log('  - POST /infer      - LLM inference endpoint');
       console.log('');
       console.log('📝 Example curl command:');
       console.log(`curl -X POST http://localhost:${this.port}/infer \\`);
