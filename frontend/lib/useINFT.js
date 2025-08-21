@@ -306,14 +306,15 @@ export function useINFT() {
         if (done) break
         
         buffer += decoder.decode(value, { stream: true })
-        
-        // Process complete events
-        const events = buffer.split('\n\n')
+
+        // Process complete events (handle both \n\n and \r\n\r\n)
+        const events = buffer.split(/\r?\n\r?\n/)
         buffer = events.pop() // Keep incomplete event in buffer
-        
+
         events.forEach(eventData => {
-          if (eventData.trim()) {
-            processSSEEvent(eventData.trim(), onToken, onComplete, onError)
+          const trimmed = eventData.trim()
+          if (trimmed) {
+            processSSEEvent(trimmed, onToken, onComplete, onError)
           }
         })
       }
@@ -341,13 +342,16 @@ export function useINFT() {
     let data = ''
     let id = ''
     
-    lines.forEach(line => {
+    lines.forEach(rawLine => {
+      const line = rawLine.replace(/\r$/, '') // tolerate CRLF
       if (line.startsWith('event: ')) {
-        eventType = line.substring(7)
+        eventType = line.substring(7).trim()
       } else if (line.startsWith('data: ')) {
-        data = line.substring(6)
+        // Some servers may split data across multiple data: lines; concatenate
+        const piece = line.substring(6)
+        data = data ? data + piece : piece
       } else if (line.startsWith('id: ')) {
-        id = line.substring(4)
+        id = line.substring(4).trim()
       }
     })
     
@@ -391,6 +395,15 @@ export function useINFT() {
         case 'error':
           onError && onError(new Error(parsedData.error))
           break
+        default:
+          // Fallback: if server didn't set event name, infer from payload
+          if (parsedData.type === 'start') {
+            onToken && onToken({ type: 'start', metadata: parsedData })
+          } else if (parsedData.type === 'token') {
+            onToken && onToken({ type: 'token', content: parsedData.content, tokenCount: parsedData.tokenCount, done: parsedData.done })
+          } else if (parsedData.type === 'completion') {
+            onComplete && onComplete({ type: 'completion', fullResponse: parsedData.fullResponse, totalTokens: parsedData.totalTokens, done: parsedData.done })
+          }
       }
       
     } catch (e) {

@@ -31,8 +31,6 @@ import { useINFT } from '../lib/useINFT'
 import { addZeroGNetwork } from '../lib/wagmi'
 import { CONTRACT_ADDRESSES, INFT_ABI } from '../lib/constants'
 
-
-
 /**
  * Component to display user's owned token IDs
  */
@@ -54,12 +52,17 @@ function MyTokensList({ userAddress }) {
         
         for (let tokenId = 1; tokenId <= 10; tokenId++) {
           try {
+            // Add delay between requests to prevent rate limiting
+            if (tokenId > 1) {
+              await new Promise(resolve => setTimeout(resolve, 100)) // 100ms delay
+            }
+            
             const response = await fetch(`https://evmrpc-testnet.0g.ai`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 jsonrpc: '2.0',
-                id: 1,
+                id: tokenId, // Use tokenId as unique request ID
                 method: 'eth_call',
                 params: [{
                   to: CONTRACT_ADDRESSES.INFT,
@@ -84,6 +87,11 @@ function MyTokensList({ userAddress }) {
             }
           } catch (error) {
             console.log(`Token ${tokenId} check failed:`, error)
+            // If we hit rate limiting, break to avoid further errors
+            if (error.message && error.message.includes('rate')) {
+              console.log('Rate limit detected, stopping token checks')
+              break
+            }
           }
         }
         
