@@ -25,7 +25,7 @@ export default function App({ Component, pageProps }) {
   }
 
   return (
-    <div className={inter.variable}>
+    <div className={`${inter.variable} dark`}>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <Component {...pageProps} />

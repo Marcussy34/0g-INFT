@@ -6,21 +6,27 @@ import {
   Wallet, 
   Coins, 
   Users, 
-  ArrowLeftRight, 
+  ArrowUpRight, 
   Copy,
   MessageSquare,
   Settings,
-  PlusCircle,
+  Plus,
   Shield,
-  Zap,
-  Radio,
+  Sparkles,
+  Activity,
   Play,
-  Square
+  Pause,
+  ChevronRight,
+  ExternalLink
 } from 'lucide-react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
+import { Badge } from './ui/badge'
+import { Separator } from './ui/separator'
+import { Switch } from './ui/switch'
+import { Skeleton } from './ui/skeleton'
 import { useINFT } from '../lib/useINFT'
 import { addZeroGNetwork } from '../lib/wagmi'
 import { CONTRACT_ADDRESSES, INFT_ABI } from '../lib/constants'
@@ -93,26 +99,41 @@ function MyTokensList({ userAddress }) {
   }, [userAddress])
   
   if (loading) {
-    return <p className="text-gray-500">Loading your tokens...</p>
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-24" />
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-8 w-16" />
+        </div>
+      </div>
+    )
   }
   
   if (ownedTokens.length === 0) {
-    return <p className="text-gray-500">No tokens found</p>
+    return (
+      <div className="text-center py-6">
+        <div className="text-muted-foreground text-sm">No tokens found</div>
+        <div className="text-xs text-muted-foreground mt-1">Mint your first INFT to get started</div>
+      </div>
+    )
   }
   
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-gray-600 mb-3">INFTs you own on the current contract:</p>
+    <div className="space-y-3">
+      <div className="text-sm text-muted-foreground">Your INFTs</div>
       <div className="flex flex-wrap gap-2">
         {ownedTokens.map(tokenId => (
-          <div key={tokenId} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
-            Token #{tokenId}
-          </div>
+          <Badge key={tokenId} variant="secondary" className="px-3 py-1">
+            #{tokenId}
+          </Badge>
         ))}
       </div>
-      <p className="text-xs text-green-600 mt-2">
-        ✅ You can perform inference with any of these tokens
-      </p>
+      <div className="text-xs text-muted-foreground flex items-center gap-1">
+        <Activity className="h-3 w-3" />
+        Ready for AI inference
+      </div>
     </div>
   )
 }
@@ -618,113 +639,120 @@ export default function INFTDashboard() {
   // Show loading until component is mounted (fixes hydration error)
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <p>Loading...</p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-foreground mx-auto"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
       </div>
     )
   }
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center gap-2">
-              <Zap className="h-6 w-6 text-blue-600" />
-              0G INFT Dashboard
-            </CardTitle>
-            <CardDescription>
-              Connect your wallet to interact with Intelligent NFTs on 0G Galileo testnet
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleConnect} className="w-full" size="lg">
-              <Wallet className="mr-2 h-5 w-5" />
-              Connect Wallet
-            </Button>
-            <p className="text-sm text-gray-500 mt-4 text-center">
-              Make sure you have MetaMask or another Web3 wallet installed
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-8">
+          <div className="text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent mb-4">
+              <Sparkles className="h-8 w-8 text-foreground" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold tracking-tight">0G INFT</h1>
+              <p className="text-muted-foreground">
+                Intelligent NFTs on 0G Galileo testnet
+              </p>
+            </div>
+          </div>
+          
+          <Card className="border-border">
+            <CardContent className="pt-6">
+              <Button onClick={handleConnect} className="w-full" size="lg">
+                <Wallet className="mr-2 h-4 w-4" />
+                Connect Wallet
+              </Button>
+            </CardContent>
+          </Card>
+          
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground">
+              MetaMask or Web3 wallet required
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                <Zap className="h-8 w-8 text-blue-600" />
-                0G INFT Dashboard
-              </h1>
-              <p className="text-gray-600 mt-1">
-                Manage your Intelligent NFTs on 0G Galileo testnet
-              </p>
+        <header className="mb-12">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-accent">
+                <Sparkles className="h-5 w-5 text-foreground" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight">0G INFT</h1>
+                <p className="text-sm text-muted-foreground">Intelligent NFTs</p>
+              </div>
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Connected Account</p>
-                <p className="font-mono text-sm">{address?.slice(0, 6)}...{address?.slice(-4)}</p>
-                <p className="text-sm text-gray-500">
-                  Balance: {userBalance?.toString() || '0'} INFTs
-                </p>
+              <div className="hidden sm:block text-right space-y-1">
+                <div className="text-xs text-muted-foreground">Connected</div>
+                <div className="font-mono text-sm">{address?.slice(0, 6)}...{address?.slice(-4)}</div>
+                <div className="text-xs text-muted-foreground">
+                  {userBalance?.toString() || '0'} INFTs
+                </div>
               </div>
-              <Button variant="outline" onClick={() => disconnect()}>
+              <Button variant="ghost" size="sm" onClick={() => disconnect()}>
                 Disconnect
               </Button>
             </div>
           </div>
-        </div>
+        </header>
 
-        {/* Status Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
+        {/* Status Overview */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <Card className="border-border">
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Coins className="h-6 w-6 text-blue-600" />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent">
+                  <Coins className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{currentTokenId?.toString() || '0'}</p>
-                  <p className="text-gray-600">Next Token to Mint</p>
+                  <div className="text-2xl font-semibold">{currentTokenId?.toString() || '0'}</div>
+                  <div className="text-xs text-muted-foreground">Next Token</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <Users className="h-6 w-6 text-green-600" />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent">
+                  <Users className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{userBalance?.toString() || '0'}</p>
-                  <p className="text-gray-600">INFTs I Own</p>
+                  <div className="text-2xl font-semibold">{userBalance?.toString() || '0'}</div>
+                  <div className="text-xs text-muted-foreground">Owned INFTs</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <Shield className="h-6 w-6 text-purple-600" />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent">
+                  <Activity className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-lg font-bold">0G Galileo</p>
-                  <p className="text-gray-600">Testnet Active</p>
+                  <div className="text-sm font-medium">0G Galileo</div>
+                  <div className="text-xs text-muted-foreground">Testnet</div>
                 </div>
               </div>
             </CardContent>
@@ -733,77 +761,68 @@ export default function INFTDashboard() {
 
         {/* My Tokens Section */}
         {userBalance && userBalance > 0 && (
-          <Card className="mb-8">
+          <Card className="mb-8 border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Coins className="h-5 w-5" />
-                My Token IDs
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Coins className="h-4 w-4" />
+                My INFTs
               </CardTitle>
-              <CardDescription>
-                INFTs you own on this contract and can use for AI inference
-              </CardDescription>
             </CardHeader>
             <CardContent>
               <MyTokensList userAddress={address} />
-              {mounted && address && (
-                <div className="mt-3 space-y-1">
-                  <p className="text-xs text-green-600">
-                    ✅ You can perform inference with any of these tokens
-                  </p>
-                  <p className="text-xs text-amber-600">
-                    ℹ️ Contract updated: Only showing tokens from the current deployment
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
         )}
 
         {/* Main Operations */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Mint INFT */}
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PlusCircle className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Plus className="h-4 w-4" />
                 Mint INFT
               </CardTitle>
-              <CardDescription>
-                Create a new Intelligent NFT with encrypted metadata
+              <CardDescription className="text-xs">
+                Create a new Intelligent NFT
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <form onSubmit={handleMint} className="space-y-4">
-                <div>
-                  <Label htmlFor="recipient">Recipient Address</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="recipient" className="text-xs font-medium">Recipient</Label>
                   <Input
                     id="recipient"
                     value={mintForm.recipient}
                     onChange={(e) => setMintForm({...mintForm, recipient: e.target.value})}
                     placeholder="0x..."
+                    className="text-sm"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="encryptedURI">Encrypted URI</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="encryptedURI" className="text-xs font-medium">Encrypted URI</Label>
                   <Input
                     id="encryptedURI"
                     value={mintForm.encryptedURI}
                     onChange={(e) => setMintForm({...mintForm, encryptedURI: e.target.value})}
                     placeholder="0g://storage/..."
+                    className="text-sm"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="metadataHash">Metadata Hash</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="metadataHash" className="text-xs font-medium">Metadata Hash</Label>
                   <Input
                     id="metadataHash"
                     value={mintForm.metadataHash}
                     onChange={(e) => setMintForm({...mintForm, metadataHash: e.target.value})}
                     placeholder="0x..."
+                    className="text-sm"
                   />
                 </div>
                 <Button 
                   type="submit" 
                   className="w-full" 
+                  size="sm"
                   disabled={isWritePending || isConfirming}
                 >
                   {isWritePending || isConfirming ? 'Minting...' : 'Mint INFT'}
@@ -813,39 +832,42 @@ export default function INFTDashboard() {
           </Card>
 
           {/* Authorize Usage */}
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Authorize Usage
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings className="h-4 w-4" />
+                Authorize Access
               </CardTitle>
-              <CardDescription>
-                Grant inference access to users without transferring ownership
+              <CardDescription className="text-xs">
+                Grant inference permissions to other users
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <form onSubmit={handleAuthorize} className="space-y-4">
-                <div>
-                  <Label htmlFor="authTokenId">Token ID</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="authTokenId" className="text-xs font-medium">Token ID</Label>
                   <Input
                     id="authTokenId"
                     value={authorizeForm.tokenId}
                     onChange={(e) => setAuthorizeForm({...authorizeForm, tokenId: e.target.value})}
                     placeholder="1"
+                    className="text-sm"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="userAddress">User Address</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="userAddress" className="text-xs font-medium">User Address</Label>
                   <Input
                     id="userAddress"
                     value={authorizeForm.userAddress}
                     onChange={(e) => setAuthorizeForm({...authorizeForm, userAddress: e.target.value})}
                     placeholder="0x..."
+                    className="text-sm"
                   />
                 </div>
                 <Button 
                   type="submit" 
                   className="w-full" 
+                  size="sm"
                   disabled={isWritePending || isConfirming}
                 >
                   {isWritePending || isConfirming ? 'Authorizing...' : 'Authorize User'}
@@ -855,124 +877,119 @@ export default function INFTDashboard() {
           </Card>
 
           {/* Inference */}
-          <Card>
+          <Card className="border-border lg:col-span-2">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-base">
+                <MessageSquare className="h-4 w-4" />
                 AI Inference
               </CardTitle>
-              <CardDescription>
-                Perform AI inference using an authorized INFT
+              <CardDescription className="text-xs">
+                Perform AI inference using your INFTs
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <form onSubmit={handleInference} className="space-y-4">
-                <div>
-                  <Label htmlFor="inferTokenId">Token ID</Label>
-                  <Input
-                    id="inferTokenId"
-                    value={inferForm.tokenId}
-                    onChange={(e) => setInferForm({...inferForm, tokenId: e.target.value})}
-                    placeholder="1"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="inferTokenId" className="text-xs font-medium">Token ID</Label>
+                    <Input
+                      id="inferTokenId"
+                      value={inferForm.tokenId}
+                      onChange={(e) => setInferForm({...inferForm, tokenId: e.target.value})}
+                      placeholder="1"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={isStreamingMode}
+                        onCheckedChange={setIsStreamingMode}
+                        id="streaming-mode"
+                      />
+                      <Label htmlFor="streaming-mode" className="text-xs font-medium">
+                        Stream
+                      </Label>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="input">Input Prompt</Label>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="input" className="text-xs font-medium">Prompt</Label>
                   <Input
                     id="input"
                     value={inferForm.input}
                     onChange={(e) => setInferForm({...inferForm, input: e.target.value})}
                     placeholder="inspire me"
+                    className="text-sm"
                   />
-                </div>
-                
-                {/* Streaming Toggle */}
-                <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Radio className="h-4 w-4 text-blue-600" />
-                    <Label htmlFor="streamingToggle" className="text-sm font-medium text-blue-700">
-                      Real-time Streaming
-                    </Label>
-                  </div>
-                  <Button
-                    type="button"
-                    variant={isStreamingMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setIsStreamingMode(!isStreamingMode)}
-                    className="h-8"
-                  >
-                    {isStreamingMode ? (
-                      <>
-                        <Square className="mr-1 h-3 w-3" />
-                        Streaming
-                      </>
-                    ) : (
-                      <>
-                        <Play className="mr-1 h-3 w-3" />
-                        Regular
-                      </>
-                    )}
-                  </Button>
                 </div>
                 
                 <Button 
                   type="submit" 
                   className="w-full" 
+                  size="sm"
                   disabled={isInferring || isStreaming}
                 >
                   {isStreaming ? (
                     <>
-                      <Radio className="mr-2 h-4 w-4 animate-pulse" />
+                      <Activity className="mr-2 h-3 w-3 animate-pulse" />
                       Streaming...
                     </>
                   ) : isInferring ? (
-                    'Processing...'
-                  ) : isStreamingMode ? (
                     <>
-                      <Radio className="mr-2 h-4 w-4" />
-                      Start Streaming
+                      <Activity className="mr-2 h-3 w-3 animate-spin" />
+                      Processing...
                     </>
                   ) : (
-                    'Run Inference'
+                    <>
+                      <Play className="mr-2 h-3 w-3" />
+                      {isStreamingMode ? 'Start Stream' : 'Run Inference'}
+                    </>
                   )}
                 </Button>
                 
                 {/* Streaming Metadata Display */}
                 {streamingMetadata && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h4 className="font-semibold text-blue-800 mb-2">🚀 Streaming Session Started</h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm text-blue-700">
-                      <div>🤖 Provider: <span className="font-mono">{streamingMetadata.provider}</span></div>
-                      <div>🧠 Model: <span className="font-mono">{streamingMetadata.model}</span></div>
-                      <div>🌡️ Temperature: <span className="font-mono">{streamingMetadata.temperature}</span></div>
-                      <div>⏰ Started: <span className="font-mono">{new Date(streamingMetadata.timestamp).toLocaleTimeString()}</span></div>
+                  <div className="p-3 bg-accent/50 border border-border rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="h-3 w-3" />
+                      <span className="text-xs font-medium">Streaming Session</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                      <div>Provider: <span className="font-mono">{streamingMetadata.provider}</span></div>
+                      <div>Model: <span className="font-mono">{streamingMetadata.model}</span></div>
+                      <div>Temperature: <span className="font-mono">{streamingMetadata.temperature}</span></div>
+                      <div>Started: <span className="font-mono">{new Date(streamingMetadata.timestamp).toLocaleTimeString()}</span></div>
                     </div>
                   </div>
                 )}
 
                 {/* Streaming Tokens Display */}
                 {(isStreaming || streamingTokens.length > 0) && (
-                  <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="p-4 bg-accent/30 border border-border rounded-lg">
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-gray-800">
+                      <div className="flex items-center gap-2">
                         {isStreaming ? (
                           <>
-                            <Radio className="inline h-4 w-4 mr-1 animate-pulse text-blue-600" />
-                            Live Streaming
+                            <Activity className="h-3 w-3 animate-pulse" />
+                            <span className="text-xs font-medium">Streaming</span>
                           </>
                         ) : (
-                          <>✅ Stream Complete</>
+                          <>
+                            <span className="text-xs font-medium">Complete</span>
+                          </>
                         )}
-                      </h4>
+                      </div>
                       {streamingTokens.length > 0 && (
-                        <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                        <Badge variant="secondary" className="text-xs">
                           {streamingTokens.length} tokens
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     
-                    <div className="bg-white p-3 border rounded min-h-[80px] max-h-60 overflow-y-auto">
-                      <div className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed">
+                    <div className="bg-card p-3 border border-border rounded min-h-[80px] max-h-60 overflow-y-auto">
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed">
                         {streamingTokens.map((token, index) => (
                           <span 
                             key={index} 
@@ -983,7 +1000,7 @@ export default function INFTDashboard() {
                           </span>
                         ))}
                         {isStreaming && (
-                          <span className="inline-block w-2 h-4 bg-blue-600 animate-pulse ml-1"></span>
+                          <span className="inline-block w-2 h-4 bg-foreground animate-pulse ml-1"></span>
                         )}
                       </div>
                     </div>
@@ -992,53 +1009,61 @@ export default function INFTDashboard() {
 
                 {/* Inference Success Result */}
                 {inferenceResult && (
-                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <h4 className="font-semibold text-green-800 mb-2">✅ Inference Result:</h4>
-                    <p className="text-green-700 whitespace-pre-wrap">{inferenceResult.output}</p>
+                  <div className="p-4 bg-accent/30 border border-border rounded-lg">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500/20">
+                        <span className="text-green-600 text-xs">✓</span>
+                      </div>
+                      <span className="text-xs font-medium">Inference Complete</span>
+                    </div>
+                    <div className="bg-card p-3 border border-border rounded">
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{inferenceResult.output}</p>
+                    </div>
                     
                     {/* Enhanced Metadata Display */}
                     {inferenceResult.metadata && (
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-green-600">
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                         {inferenceResult.metadata.provider && (
-                          <div>🤖 Provider: <span className="font-mono">{inferenceResult.metadata.provider}</span></div>
+                          <div>Provider: <span className="font-mono">{inferenceResult.metadata.provider}</span></div>
                         )}
                         {inferenceResult.metadata.model && (
-                          <div>🧠 Model: <span className="font-mono">{inferenceResult.metadata.model}</span></div>
+                          <div>Model: <span className="font-mono">{inferenceResult.metadata.model}</span></div>
                         )}
                         {inferenceResult.metadata.temperature && (
-                          <div>🌡️ Temperature: <span className="font-mono">{inferenceResult.metadata.temperature}</span></div>
+                          <div>Temperature: <span className="font-mono">{inferenceResult.metadata.temperature}</span></div>
                         )}
                         {inferenceResult.metadata.totalTokens && (
-                          <div>🔢 Tokens: <span className="font-mono">{inferenceResult.metadata.totalTokens}</span></div>
+                          <div>Tokens: <span className="font-mono">{inferenceResult.metadata.totalTokens}</span></div>
                         )}
                       </div>
                     )}
                     
                     {inferenceResult.proof && (
-                      <p className="text-xs text-green-600 mt-2">
-                        🔐 Proof: {inferenceResult.proof.slice(0, 50)}...
-                      </p>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Proof: <span className="font-mono">{inferenceResult.proof.slice(0, 50)}...</span>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* Inference Error Display */}
                 {inferenceError && (
-                  <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <h4 className="font-semibold text-red-800 mb-2">❌ Inference Failed:</h4>
-                    <p className="text-red-700">{inferenceError}</p>
+                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center justify-center w-5 h-5 rounded-full bg-destructive/20">
+                        <span className="text-destructive text-xs">✕</span>
+                      </div>
+                      <span className="text-xs font-medium text-destructive">Inference Failed</span>
+                    </div>
+                    <p className="text-sm text-destructive/80 mb-3">{inferenceError}</p>
                     {inferenceError.includes('not authorized') && (
-                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                        <p className="text-sm text-blue-700">
-                          💡 <strong>Need access?</strong> Ask the token owner to authorize your address using the "Authorize User" section above.
-                        </p>
+                      <div className="p-3 bg-accent/50 border border-border rounded text-xs text-muted-foreground">
+                        <strong>Need access?</strong> Ask the token owner to authorize your address.
                       </div>
                     )}
                     {inferenceError.includes('Network error') && (
-                      <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                        <p className="text-sm text-yellow-700">
-                          🔧 <strong>Troubleshooting:</strong> Make sure the off-chain service is running on localhost:3000
-                        </p>
+                      <div className="p-3 bg-accent/50 border border-border rounded text-xs text-muted-foreground">
+                        <strong>Troubleshooting:</strong> Make sure the off-chain service is running on localhost:3000
                       </div>
                     )}
                   </div>
@@ -1047,47 +1072,50 @@ export default function INFTDashboard() {
             </CardContent>
           </Card>
 
-          {/* Transfer (Placeholder) */}
-          <Card>
+          {/* Transfer */}
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ArrowLeftRight className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ArrowUpRight className="h-4 w-4" />
                 Transfer INFT
               </CardTitle>
-              <CardDescription>
-                Transfer ownership with TEE attestation (TEE mock implementation)
+              <CardDescription className="text-xs">
+                Transfer ownership with TEE attestation
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <form onSubmit={handleTransfer} className="space-y-4">
-                <div>
-                  <Label htmlFor="fromAddress">From Address</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="fromAddress" className="text-xs font-medium">From</Label>
                   <Input
                     id="fromAddress"
                     value={transferForm.from}
                     onChange={(e) => setTransferForm({...transferForm, from: e.target.value})}
                     placeholder="0x..."
+                    className="text-sm"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="toAddress">To Address</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="toAddress" className="text-xs font-medium">To</Label>
                   <Input
                     id="toAddress"
                     value={transferForm.to}
                     onChange={(e) => setTransferForm({...transferForm, to: e.target.value})}
                     placeholder="0x..."
+                    className="text-sm"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="transferTokenId">Token ID</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="transferTokenId" className="text-xs font-medium">Token ID</Label>
                   <Input
                     id="transferTokenId"
                     value={transferForm.tokenId}
                     onChange={(e) => setTransferForm({...transferForm, tokenId: e.target.value})}
                     placeholder="1"
+                    className="text-sm"
                   />
                 </div>
-                <Button type="submit" className="w-full" variant="outline" disabled={isTransferring}>
+                <Button type="submit" className="w-full" size="sm" disabled={isTransferring}>
                   {isTransferring ? 'Transferring...' : 'Transfer INFT'}
                 </Button>
               </form>
@@ -1095,20 +1123,20 @@ export default function INFTDashboard() {
           </Card>
 
           {/* Authorization Checker */}
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Check Authorizations
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Shield className="h-4 w-4" />
+                Check Access
               </CardTitle>
-              <CardDescription>
-                Check who is authorized to use a specific INFT token
+              <CardDescription className="text-xs">
+                View authorization status for any token
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <form onSubmit={handleAuthCheck} className="space-y-4">
-                <div>
-                  <Label htmlFor="checkTokenId">Token ID</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="checkTokenId" className="text-xs font-medium">Token ID</Label>
                   <Input
                     id="checkTokenId"
                     type="number"
@@ -1117,59 +1145,65 @@ export default function INFTDashboard() {
                       ...authCheckForm,
                       tokenId: e.target.value
                     })}
-                    placeholder="Enter token ID to check"
+                    placeholder="Enter token ID"
                     min="1"
+                    className="text-sm"
                   />
                 </div>
                 
                 <Button 
                   type="submit" 
                   className="w-full" 
+                  size="sm"
                   disabled={isCheckingAuth}
                 >
-                  {isCheckingAuth ? 'Checking...' : 'Check Authorizations'}
+                  {isCheckingAuth ? 'Checking...' : 'Check Access'}
                 </Button>
               </form>
 
               {/* Authorization Results */}
               {authCheckResults && (
-                <div className="mt-6 space-y-4">
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold text-lg mb-3">
-                      Authorization Status for Token #{authCheckResults.tokenId}
-                    </h4>
+                <div className="space-y-4">
+                  <Separator />
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Shield className="h-4 w-4" />
+                      <span className="text-sm font-medium">
+                        Token #{authCheckResults.tokenId}
+                      </span>
+                    </div>
                     
                     {authCheckResults.error ? (
-                      <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-sm font-medium text-red-700">❌ Error:</p>
-                        <p className="text-sm text-red-600 mt-1">{authCheckResults.error}</p>
+                      <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                        <div className="text-xs font-medium text-destructive mb-2">Error</div>
+                        <div className="text-xs text-destructive/80 mb-2">{authCheckResults.error}</div>
                         {authCheckResults.exists === false && (
-                          <p className="text-xs text-red-500 mt-2">
-                            💡 Tip: Try minting a new token or check a different token ID that exists.
-                          </p>
+                          <div className="text-xs text-muted-foreground">
+                            Try minting a new token or check a different token ID
+                          </div>
                         )}
-                        <p className="text-xs text-gray-500 mt-2">
-                          ⏰ Checked at {authCheckResults.checkedAt}
-                        </p>
+                        <div className="text-xs text-muted-foreground mt-2">
+                          Checked at {authCheckResults.checkedAt}
+                        </div>
                       </div>
                     ) : authCheckResults.tokenOwner && (
-                      <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                        <p className="text-sm font-medium text-blue-700">👑 Token Owner:</p>
-                        <p className="text-sm text-blue-600 font-mono break-all">
+                      <div className="mb-4 p-3 bg-accent/50 border border-border rounded-lg">
+                        <div className="text-xs text-muted-foreground mb-1">Owner</div>
+                        <div className="text-xs font-mono break-all">
                           {authCheckResults.tokenOwner}
-                        </p>
+                        </div>
                       </div>
                     )}
 
                     {!authCheckResults.error && (
                       <>
-                        <div className="space-y-2">
-                          <p className="font-medium text-gray-700">Authorization Status:</p>
-                          <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded mb-3">
-                            💡 <strong>Note:</strong> Token owners must explicitly authorize themselves for inference access.
+                        <div className="space-y-3">
+                          <div className="text-xs font-medium">Access Status</div>
+                          <div className="text-xs text-muted-foreground bg-accent/30 p-2 rounded">
+                            <strong>Note:</strong> Token owners must explicitly authorize themselves for inference access.
                           </div>
                           {!authCheckResults.authorizations || authCheckResults.authorizations.length === 0 ? (
-                            <p className="text-gray-500 text-sm">No addresses checked</p>
+                            <div className="text-xs text-muted-foreground">No addresses checked</div>
                           ) : (
                             <div className="space-y-2">
                               {authCheckResults.authorizations.map((auth, index) => (
@@ -1177,33 +1211,33 @@ export default function INFTDashboard() {
                                   key={index}
                                   className={`p-3 rounded-lg border ${
                                 auth.isAuthorized 
-                                  ? 'bg-green-50 border-green-200' 
-                                  : 'bg-gray-50 border-gray-200'
+                                  ? 'bg-green-500/10 border-green-500/20' 
+                                  : 'bg-accent/30 border-border'
                               }`}
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
-                                  <p className="text-sm font-mono break-all">
+                                  <div className="text-xs font-mono break-all">
                                     {auth.address}
-                                  </p>
+                                  </div>
                                   <div className="flex items-center gap-2 mt-1">
                                     {auth.isOwner && (
-                                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                                        👑 Owner
-                                      </span>
+                                      <Badge variant="secondary" className="text-xs h-5">
+                                        Owner
+                                      </Badge>
                                     )}
                                     {auth.isCurrentUser && (
-                                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                                        👤 You
-                                      </span>
+                                      <Badge variant="outline" className="text-xs h-5">
+                                        You
+                                      </Badge>
                                     )}
                                   </div>
                                 </div>
                                 <div className="ml-4">
                                   {auth.isAuthorized ? (
-                                    <span className="text-green-600 font-semibold">✅ Authorized</span>
+                                    <span className="text-xs text-green-600 font-medium">✓ Authorized</span>
                                   ) : (
-                                    <span className="text-gray-500">❌ Not Authorized</span>
+                                    <span className="text-xs text-muted-foreground">✕ Not Authorized</span>
                                   )}
                                 </div>
                               </div>
@@ -1212,9 +1246,9 @@ export default function INFTDashboard() {
                         </div>
                           )}
                           
-                          <p className="text-xs text-gray-500 mt-3">
-                            ⏰ Checked at {authCheckResults.checkedAt}
-                          </p>
+                          <div className="text-xs text-muted-foreground">
+                            Checked at {authCheckResults.checkedAt}
+                          </div>
                         </div>
                       </>
                     )}
@@ -1227,73 +1261,70 @@ export default function INFTDashboard() {
 
         {/* Transaction Status */}
         {(isWritePending || isConfirming || isConfirmed) && (
-          <Card className="mt-6 border-l-4 border-l-blue-500">
+          <Card className="mt-8 border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="h-4 w-4" />
                 Transaction Status
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {isWritePending && (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <p className="text-blue-600 font-medium">📤 Transaction submitted to blockchain...</p>
-                  </div>
-                )}
-                {isConfirming && (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
-                    <p className="text-yellow-600 font-medium">⏳ Waiting for blockchain confirmation...</p>
-                  </div>
-                )}
-                {isConfirmed && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="h-4 w-4 rounded-full bg-green-600 flex items-center justify-center">
-                        <span className="text-white text-xs">✓</span>
-                      </div>
-                      <p className="text-green-600 font-semibold">✅ Transaction confirmed successfully!</p>
+            <CardContent className="space-y-3">
+              {isWritePending && (
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-muted border-t-foreground"></div>
+                  <span className="text-sm">Transaction submitted...</span>
+                </div>
+              )}
+              {isConfirming && (
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-muted border-t-foreground"></div>
+                  <span className="text-sm">Waiting for confirmation...</span>
+                </div>
+              )}
+              {isConfirmed && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-4 w-4 rounded-full bg-green-500 flex items-center justify-center">
+                      <span className="text-white text-xs">✓</span>
                     </div>
-                    <p className="text-sm text-gray-600">Your authorization has been processed and is now active on the blockchain.</p>
-                    {hash && (
-                      <div className="bg-gray-100 p-3 rounded">
-                        <p className="text-sm text-gray-700 font-medium">Transaction Hash:</p>
-                        <p className="text-xs text-gray-600 font-mono break-all">{hash}</p>
-                        <a 
-                          href={`https://chainscan-galileo.0g.ai/tx/${hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 text-sm mt-1 inline-block"
-                        >
-                          🔗 View on 0G Explorer
-                        </a>
-                      </div>
-                    )}
+                    <span className="text-sm font-medium">Transaction confirmed</span>
                   </div>
-                )}
-              </div>
+                  {hash && (
+                    <div className="p-3 bg-accent/50 border border-border rounded">
+                      <div className="text-xs text-muted-foreground mb-1">Transaction Hash</div>
+                      <div className="text-xs font-mono break-all mb-2">{hash}</div>
+                      <a 
+                        href={`https://chainscan-galileo.0g.ai/tx/${hash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-foreground hover:text-foreground/80"
+                      >
+                        View on Explorer
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
         {/* Error Display */}
         {writeError && (
-          <Card className="mt-6 border-l-4 border-l-red-500 bg-red-50">
+          <Card className="mt-8 border-destructive/20 bg-destructive/5">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-700">
-                <span className="text-lg">❌</span>
+              <CardTitle className="flex items-center gap-2 text-base text-destructive">
+                <span className="text-destructive">✕</span>
                 Transaction Failed
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <p className="text-red-600 font-medium">Authorization transaction failed:</p>
-                <p className="text-red-700 text-sm bg-red-100 p-2 rounded">{writeError.message}</p>
-                <p className="text-xs text-red-600">
-                  💡 Common causes: Insufficient gas, network issues, or user rejected transaction
-                </p>
+            <CardContent className="space-y-3">
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive">
+                {writeError.message}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Common causes: Insufficient gas, network issues, or user rejected transaction
               </div>
             </CardContent>
           </Card>
