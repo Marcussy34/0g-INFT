@@ -6,6 +6,8 @@ import * as path from 'path';
 import { JsonRpcProvider, Contract, Wallet } from 'ethers';
 import * as dotenv from 'dotenv';
 import axios, { AxiosResponse } from 'axios';
+import { rateLimit } from 'express-rate-limit';
+import CircuitBreaker from 'opossum';
 
 // Load environment variables from parent directory and local
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -111,6 +113,26 @@ interface OllamaGenerateResponse {
   eval_duration?: number;
 }
 
+interface LLMCallMetrics {
+  startTime: number;
+  endTime?: number;
+  duration?: number;
+  tokenCount?: number;
+  promptLength: number;
+  contextQuoteCount: number;
+  usedFallback: boolean;
+  circuitBreakerState: string;
+}
+
+interface StructuredLogContext {
+  requestId: string;
+  tokenId: number;
+  userAddress: string;
+  step: string;
+  metrics?: LLMCallMetrics;
+  error?: string;
+}
+
 class INFTOffChainService {
   private app: express.Application;
   private provider!: JsonRpcProvider;
@@ -118,6 +140,7 @@ class INFTOffChainService {
   private oracleContract!: Contract;
   private devKeys!: DevKeys;
   private llmConfig!: LLMConfig;
+  private llmCircuitBreaker!: CircuitBreaker<[string], string>;
   private port: number;
 
   constructor() {
@@ -132,6 +155,9 @@ class INFTOffChainService {
     
     // Load LLM configuration
     this.loadLLMConfig();
+    
+    // Initialize circuit breaker for LLM calls
+    this.initializeLLMCircuitBreaker();
     
     // Setup Express middleware
     this.setupMiddleware();
@@ -200,15 +226,148 @@ class INFTOffChainService {
   }
 
   /**
+   * Initialize LLM Circuit Breaker for resilient API calls
+   */
+  private initializeLLMCircuitBreaker(): void {
+    const circuitBreakerOptions = {
+      timeout: this.llmConfig.requestTimeoutMs,
+      errorThresholdPercentage: 50, // Open circuit after 50% failures
+      resetTimeout: 30000, // Try again after 30 seconds
+      rollingCountTimeout: 10000, // 10 second rolling window
+      rollingCountBuckets: 10,
+      name: 'LLM-Ollama-Circuit',
+      group: 'llm-calls'
+    };
+
+    this.llmCircuitBreaker = new CircuitBreaker(this.callLLMDirect.bind(this), circuitBreakerOptions);
+    
+    // Add fallback for circuit breaker
+    this.llmCircuitBreaker.fallback(() => {
+      this.logStructured({
+        requestId: 'circuit-fallback',
+        tokenId: 0,
+        userAddress: 'system',
+        step: 'llm_circuit_fallback',
+        error: 'Circuit breaker fallback triggered'
+      });
+      throw new Error('LLM_CIRCUIT_OPEN: Circuit breaker is open, failing fast');
+    });
+
+    // Circuit breaker event listeners for monitoring
+    this.llmCircuitBreaker.on('open', () => {
+      this.logStructured({
+        requestId: 'circuit-event',
+        tokenId: 0,
+        userAddress: 'system',
+        step: 'circuit_state_change',
+        error: 'Circuit breaker opened - LLM service appears degraded'
+      });
+    });
+
+    this.llmCircuitBreaker.on('halfOpen', () => {
+      this.logStructured({
+        requestId: 'circuit-event',
+        tokenId: 0,
+        userAddress: 'system',
+        step: 'circuit_state_change'
+      });
+    });
+
+    this.llmCircuitBreaker.on('close', () => {
+      this.logStructured({
+        requestId: 'circuit-event',
+        tokenId: 0,
+        userAddress: 'system',
+        step: 'circuit_state_change'
+      });
+    });
+
+    console.log('🔧 LLM Circuit Breaker initialized:');
+    console.log('  - Timeout:', circuitBreakerOptions.timeout + 'ms');
+    console.log('  - Error Threshold:', circuitBreakerOptions.errorThresholdPercentage + '%');
+    console.log('  - Reset Timeout:', circuitBreakerOptions.resetTimeout + 'ms');
+  }
+
+  /**
+   * Structured logging with metadata for Phase 3 observability
+   */
+  private logStructured(context: StructuredLogContext): void {
+    const timestamp = new Date().toISOString();
+    const logLevel = context.error ? 'ERROR' : 'INFO';
+    
+    // Base log structure
+    const logEntry = {
+      timestamp,
+      level: logLevel,
+      service: '0g-inft-offchain',
+      version: '2.0.0',
+      requestId: context.requestId,
+      tokenId: context.tokenId,
+      userAddress: context.userAddress,
+      step: context.step
+    };
+
+    // Add metrics if available
+    if (context.metrics) {
+      Object.assign(logEntry, {
+        llm: {
+          provider: this.llmConfig.provider,
+          model: this.llmConfig.model,
+          duration_ms: context.metrics.duration,
+          token_count: context.metrics.tokenCount,
+          prompt_length: context.metrics.promptLength,
+          context_quotes: context.metrics.contextQuoteCount,
+          used_fallback: context.metrics.usedFallback,
+          circuit_state: context.metrics.circuitBreakerState
+        }
+      });
+    }
+
+    // Add error if present
+    if (context.error) {
+      Object.assign(logEntry, { error: context.error });
+    }
+
+    // Log in production-safe format (no full prompts/completions)
+    console.log(JSON.stringify(logEntry));
+  }
+
+  /**
    * Setup Express middleware
    */
   private setupMiddleware(): void {
     this.app.use(cors());
     this.app.use(express.json());
     
-    // Request logging
+    // Rate limiting for /infer endpoint (Phase 3 security)
+    const inferRateLimit = rateLimit({
+      windowMs: 60 * 1000, // 1 minute window
+      limit: 30, // Limit each IP to 30 inference requests per minute
+      message: {
+        error: 'Too many inference requests. Please try again later.',
+        code: 'RATE_LIMIT_EXCEEDED'
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => {
+        // Skip rate limiting for health checks and other non-inference endpoints
+        return !req.path.startsWith('/infer');
+      }
+    });
+
+    this.app.use(inferRateLimit);
+    
+    // Request logging with structured format
     this.app.use((req, res, next) => {
-      console.log(`📨 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+      const requestId = crypto.randomUUID();
+      req.headers['x-request-id'] = requestId;
+      
+      this.logStructured({
+        requestId,
+        tokenId: req.body?.tokenId || 0,
+        userAddress: req.body?.user || 'unknown',
+        step: 'request_received'
+      });
       next();
     });
   }
@@ -262,35 +421,105 @@ class INFTOffChainService {
         return;
       }
 
-      // Validate and sanitize input length (Phase 0 security guardrail)
+      const requestId = req.headers['x-request-id'] as string || crypto.randomUUID();
+
+      // Enhanced input validation (Phase 3 security)
       if (request.input.length > 500) {
+        this.logStructured({
+          requestId,
+          tokenId: request.tokenId,
+          userAddress: request.user || 'unknown',
+          step: 'input_validation_failed',
+          error: `Input too long: ${request.input.length} chars (max 500)`
+        });
         res.status(400).json({ 
           success: false, 
-          error: 'Input too long. Maximum 500 characters allowed.' 
+          error: 'Input too long. Maximum 500 characters allowed.',
+          code: 'INPUT_TOO_LONG'
         });
         return;
       }
 
-      // Basic input sanitization
-      const sanitizedInput = request.input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+      // Enhanced input sanitization with character filtering
+      const sanitizedInput = request.input
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
+        .replace(/[^\w\s.,!?'"()-]/g, '') // Allow only alphanumeric, whitespace, and basic punctuation
+        .trim();
+        
       if (!sanitizedInput) {
+        this.logStructured({
+          requestId,
+          tokenId: request.tokenId,
+          userAddress: request.user || 'unknown',
+          step: 'input_validation_failed',
+          error: 'Input contains only invalid characters after sanitization'
+        });
         res.status(400).json({ 
           success: false, 
-          error: 'Input contains only invalid characters.' 
+          error: 'Input contains only invalid characters.',
+          code: 'INVALID_CHARACTERS'
         });
         return;
       }
 
-      console.log(`🎯 Processing inference request for token ${request.tokenId}`);
+      // Check for suspicious patterns
+      const suspiciousPatterns = [
+        /\b(system|admin|root|password|token|key|secret)\b/i,
+        /<script|javascript:|data:/i,
+        /\$\{.*\}/, // Template literal injection
+        /`.*`/ // Backticks
+      ];
+
+      for (const pattern of suspiciousPatterns) {
+        if (pattern.test(sanitizedInput)) {
+          this.logStructured({
+            requestId,
+            tokenId: request.tokenId,
+            userAddress: request.user || 'unknown',
+            step: 'input_validation_failed',
+            error: `Suspicious pattern detected in input`
+          });
+          res.status(400).json({
+            success: false,
+            error: 'Input contains suspicious content.',
+            code: 'SUSPICIOUS_INPUT'
+          });
+          return;
+        }
+      }
+
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress: request.user || 'unknown',
+        step: 'processing_inference_request'
+      });
 
       // Step 1: Check authorization on-chain
       const userAddress = request.user || process.env.DEFAULT_USER_ADDRESS || '0x32F91E4E2c60A9C16cAE736D3b42152B331c147F'; // Default to configured test address
+      
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress,
+        step: 'authorization_check_start'
+      });
+      
       const isAuthorized = await this.checkAuthorization(request.tokenId, userAddress);
       
       if (!isAuthorized) {
+        this.logStructured({
+          requestId,
+          tokenId: request.tokenId,
+          userAddress,
+          step: 'authorization_failed',
+          error: 'User not authorized for token'
+        });
+        
         res.status(403).json({
           success: false,
           error: `User ${userAddress} is not authorized to use token ${request.tokenId}`,
+          code: 'UNAUTHORIZED',
           metadata: {
             tokenId: request.tokenId,
             authorized: false,
@@ -301,22 +530,44 @@ class INFTOffChainService {
         return;
       }
 
-      console.log(`✅ Authorization confirmed for user ${userAddress} on token ${request.tokenId}`);
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress,
+        step: 'authorization_confirmed'
+      });
 
       // Step 2: Fetch encrypted data from 0G Storage
-      console.log('📦 Fetching encrypted data from 0G Storage...');
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress,
+        step: 'storage_fetch_start'
+      });
+      
       const encryptedData = await this.fetchFromStorage(this.devKeys.storageRootHash);
 
       // Step 3: Decrypt the data
-      console.log('🔓 Decrypting data...');
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress,
+        step: 'decryption_start'
+      });
+      
       const decryptedData = this.decryptData(encryptedData);
 
       // Step 4: Perform inference (LLM-based with fallback)
-      console.log('🤖 Performing LLM inference...');
-      const inferenceResult = await this.performInference(decryptedData, sanitizedInput);
+      const inferenceResult = await this.performInference(decryptedData, sanitizedInput, requestId);
 
       // Step 5: Generate oracle proof (extended with LLM metadata)
-      console.log('📜 Generating oracle proof...');
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress,
+        step: 'proof_generation_start'
+      });
+      
       const proof = this.generateOracleProof(request.tokenId, sanitizedInput, inferenceResult.output, inferenceResult.metadata);
 
       // Step 6: Return response
@@ -338,14 +589,29 @@ class INFTOffChainService {
         }
       };
 
-      console.log(`🎉 Inference completed successfully for token ${request.tokenId}`);
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress,
+        step: 'inference_completed_success'
+      });
+      
       res.json(response);
 
     } catch (error) {
-      console.error('❌ Error processing inference request:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const requestId = req.headers['x-request-id'] as string || 'unknown';
       
-      // Handle LLM unavailable error specifically
-      if (error instanceof Error && error.message.includes('LLM_UNAVAILABLE')) {
+      this.logStructured({
+        requestId,
+        tokenId: req.body?.tokenId || 0,
+        userAddress: req.body?.user || 'unknown',
+        step: 'inference_request_failed',
+        error: errorMessage
+      });
+      
+      // Handle specific error types
+      if (errorMessage.includes('LLM_UNAVAILABLE') || errorMessage.includes('LLM_CIRCUIT_OPEN')) {
         res.status(503).json({
           success: false,
           error: 'LLM service unavailable',
@@ -353,10 +619,20 @@ class INFTOffChainService {
         });
         return;
       }
+
+      if (errorMessage.includes('RATE_LIMIT')) {
+        res.status(429).json({
+          success: false,
+          error: 'Too many requests',
+          code: 'RATE_LIMIT_EXCEEDED'
+        });
+        return;
+      }
       
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Internal server error'
+        error: 'Internal server error',
+        code: 'INTERNAL_ERROR'
       });
     }
   }
@@ -524,9 +800,9 @@ class INFTOffChainService {
   }
 
   /**
-   * Perform LLM-based inference on the decrypted data
+   * Perform LLM-based inference on the decrypted data with circuit breaker
    */
-  private async performInference(quotesData: QuotesData, input: string): Promise<{
+  private async performInference(quotesData: QuotesData, input: string, requestId: string = 'unknown'): Promise<{
     output: string;
     metadata: {
       provider: string;
@@ -537,24 +813,51 @@ class INFTOffChainService {
       completionHash: string;
     };
   }> {
+    const startTime = Date.now();
+    const contextQuotes = quotesData.quotes.slice(0, this.llmConfig.maxContextQuotes);
+    const prompt = this.buildPrompt(input, contextQuotes);
+    
+    // Generate hashes for proof
+    const promptHash = crypto.createHash('sha256').update(prompt).digest('hex');
+    const contextHash = crypto.createHash('sha256').update(JSON.stringify(contextQuotes)).digest('hex');
+    
+    // Initialize metrics
+    const metrics: LLMCallMetrics = {
+      startTime,
+      promptLength: prompt.length,
+      contextQuoteCount: contextQuotes.length,
+      usedFallback: false,
+      circuitBreakerState: this.llmCircuitBreaker.opened ? 'open' : 
+                          this.llmCircuitBreaker.halfOpen ? 'half-open' : 'closed'
+    };
+
+    this.logStructured({
+      requestId,
+      tokenId: 0, // Will be set by caller
+      userAddress: 'system',
+      step: 'llm_inference_start',
+      metrics
+    });
+
     try {
-      // Build bounded context from quotes (Phase 0 security guardrail)
-      const contextQuotes = quotesData.quotes.slice(0, this.llmConfig.maxContextQuotes);
+      // Use circuit breaker for LLM call
+      const completion = await this.llmCircuitBreaker.fire(prompt);
       
-      // Build prompt template
-      const prompt = this.buildPrompt(input, contextQuotes);
+      metrics.endTime = Date.now();
+      metrics.duration = metrics.endTime - metrics.startTime;
+      metrics.tokenCount = completion.split(/\s+/).length; // Rough token estimate
+      metrics.circuitBreakerState = this.llmCircuitBreaker.opened ? 'open' : 
+                                  this.llmCircuitBreaker.halfOpen ? 'half-open' : 'closed';
       
-      // Generate hashes for proof
-      const promptHash = crypto.createHash('sha256').update(prompt).digest('hex');
-      const contextHash = crypto.createHash('sha256').update(JSON.stringify(contextQuotes)).digest('hex');
-      
-      console.log(`🎯 Calling LLM with ${contextQuotes.length} context quotes`);
-      
-      // Call LLM
-      const completion = await this.callLLM(prompt);
       const completionHash = crypto.createHash('sha256').update(completion).digest('hex');
       
-      console.log(`✅ LLM inference completed: "${completion.substring(0, 50)}..."`);  
+      this.logStructured({
+        requestId,
+        tokenId: 0,
+        userAddress: 'system',
+        step: 'llm_inference_success',
+        metrics
+      });
       
       return {
         output: completion,
@@ -569,15 +872,35 @@ class INFTOffChainService {
       };
       
     } catch (error) {
-      console.error('❌ LLM inference failed:', error);
+      metrics.endTime = Date.now();
+      metrics.duration = metrics.endTime - metrics.startTime;
+      metrics.circuitBreakerState = this.llmCircuitBreaker.opened ? 'open' : 
+                                  this.llmCircuitBreaker.halfOpen ? 'half-open' : 'closed';
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      this.logStructured({
+        requestId,
+        tokenId: 0,
+        userAddress: 'system',
+        step: 'llm_inference_failed',
+        metrics,
+        error: errorMessage
+      });
       
       // Fallback policy based on configuration
-      if (this.llmConfig.devFallback) {
-        console.log('⚠️ Using fallback: random quote selection');
+      if (this.llmConfig.devFallback && !errorMessage.includes('LLM_CIRCUIT_OPEN')) {
+        metrics.usedFallback = true;
         const randomIndex = Math.floor(Math.random() * quotesData.quotes.length);
         const selectedQuote = quotesData.quotes[randomIndex];
         
-        console.log(`🎲 Fallback selected quote ${randomIndex + 1}/${quotesData.quotes.length}: "${selectedQuote.substring(0, 50)}..."`);    
+        this.logStructured({
+          requestId,
+          tokenId: 0,
+          userAddress: 'system',
+          step: 'llm_fallback_used',
+          metrics
+        });
         
         return {
           output: selectedQuote,
@@ -592,7 +915,7 @@ class INFTOffChainService {
         };
       } else {
         // Throw LLM unavailable error
-        throw new Error('LLM_UNAVAILABLE: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        throw new Error('LLM_UNAVAILABLE: ' + errorMessage);
       }
     }
   }
@@ -616,9 +939,9 @@ class INFTOffChainService {
   }
 
   /**
-   * Call Ollama LLM API
+   * Direct LLM API call (wrapped by circuit breaker)
    */
-  private async callLLM(prompt: string): Promise<string> {
+  private async callLLMDirect(prompt: string): Promise<string> {
     const requestPayload = {
       model: this.llmConfig.model,
       prompt: prompt,
@@ -666,52 +989,95 @@ class INFTOffChainService {
   }
 
   /**
-   * Handle LLM health check
+   * Enhanced LLM health check with diagnostics (Phase 3)
    */
   private async handleLLMHealthCheck(req: express.Request, res: express.Response): Promise<void> {
+    const requestId = req.headers['x-request-id'] as string || crypto.randomUUID();
+    
+    this.logStructured({
+      requestId,
+      tokenId: 0,
+      userAddress: 'health_check',
+      step: 'llm_health_check_start'
+    });
+
     try {
       const startTime = Date.now();
       
-      // Simple ping to Ollama
-      const response: AxiosResponse<OllamaGenerateResponse> = await axios.post(
-        `${this.llmConfig.host}/api/generate`,
-        {
-          model: this.llmConfig.model,
-          prompt: 'ping',
-          stream: false,
-          options: {
-            num_predict: 1
-          }
-        },
-        {
-          timeout: 5000,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
+      // Test circuit breaker state and LLM connectivity
+      const testResponse = await this.llmCircuitBreaker.fire('ping');
       const latency = Date.now() - startTime;
       
-      res.json({
+      // Get circuit breaker statistics
+      const circuitStats = this.llmCircuitBreaker.stats;
+      
+      const healthData = {
         provider: this.llmConfig.provider,
         model: this.llmConfig.model,
         host: this.llmConfig.host,
         ok: true,
         latency_ms: latency,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        circuit_breaker: {
+          state: this.llmCircuitBreaker.opened ? 'open' : 
+                 this.llmCircuitBreaker.halfOpen ? 'half-open' : 'closed',
+          stats: {
+            successes: circuitStats.successes,
+            failures: circuitStats.failures,
+            timeouts: circuitStats.timeouts,
+            fires: circuitStats.fires,
+            rejects: circuitStats.rejects,
+            fallbacks: circuitStats.fallbacks
+          }
+        },
+        config: {
+          timeout_ms: this.llmConfig.requestTimeoutMs,
+          max_tokens: this.llmConfig.maxTokens,
+          temperature: this.llmConfig.temperature,
+          fallback_enabled: this.llmConfig.devFallback
+        }
+      };
+      
+      this.logStructured({
+        requestId,
+        tokenId: 0,
+        userAddress: 'health_check',
+        step: 'llm_health_check_success',
+        metrics: {
+          startTime,
+          endTime: Date.now(),
+          duration: latency,
+          promptLength: 4,
+          contextQuoteCount: 0,
+          usedFallback: false,
+          circuitBreakerState: healthData.circuit_breaker.state
+        }
       });
       
+      res.json(healthData);
+      
     } catch (error) {
-      console.error('❌ LLM health check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      this.logStructured({
+        requestId,
+        tokenId: 0,
+        userAddress: 'health_check',
+        step: 'llm_health_check_failed',
+        error: errorMessage
+      });
       
       res.status(503).json({
         provider: this.llmConfig.provider,
         model: this.llmConfig.model,
         host: this.llmConfig.host,
         ok: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+        circuit_breaker: {
+          state: this.llmCircuitBreaker.opened ? 'open' : 
+                 this.llmCircuitBreaker.halfOpen ? 'half-open' : 'closed'
+        }
       });
     }
   }
