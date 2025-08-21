@@ -1,16 +1,3 @@
-# 0G INFT Quote Generator - Phase 0 Complete ✅
-
-> **Phase 0 Status: COMPLETE** - Hardhat project setup with 0G testnet configuration
-
-## Quick Start
-
-1. Copy environment file: `cp .env.example .env`
-2. Add your private key to `.env`
-3. Get testnet tokens: https://faucet.0g.ai
-4. Test connectivity: `npx hardhat run scripts/ping.ts --network galileo`
-
----
-
 # Original Documentation: Intelligent NFTs (INFT) on 0g.ai
 
 ## I. Executive Summary

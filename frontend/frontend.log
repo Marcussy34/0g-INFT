@@ -33,3 +33,25 @@
  GET / 200 in 235ms
  ✓ Compiled in 631ms (4445 modules)
  GET / 404 in 245ms
+ ✓ Compiled in 1382ms (4299 modules)
+ ✓ Compiled in 280ms (4299 modules)
+ ✓ Compiled in 304ms (4299 modules)
+ ✓ Compiled in 313ms (4299 modules)
+ ⨯ pages/_document.js
+`next/font` error:
+Cannot be used within pages/_document.js.
+ ⨯ pages/_document.js
+`next/font` error:
+Cannot be used within pages/_document.js.
+ ○ Compiling / ...
+ ⨯ pages/_document.js
+`next/font` error:
+Cannot be used within pages/_document.js.
+ ⨯ pages/_document.js
+`next/font` error:
+Cannot be used within pages/_document.js.
+ GET / 500 in 1578ms
+ ⨯ pages/_document.js
+`next/font` error:
+Cannot be used within pages/_document.js.
+ ✓ Compiled /_error in 500ms (4392 modules)
