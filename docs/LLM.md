@@ -17,6 +17,20 @@ The approach favors Ollama by default due to its simple local HTTP API, small mo
 - Production‑grade TEE/ZKP attestation for the LLM run. We will keep the stub proof pattern already used, and scope a future upgrade path.
 - Hosting model weights on 0G Storage as the primary source. Optional later.
 
+### Phase 0 Security Guardrails (DEFINED)
+
+**Critical Security Rules**:
+- ❌ **NEVER** include encryption keys, IVs, or tags in LLM prompts
+- ❌ **NEVER** include raw binary data or hex buffers in prompts
+- ❌ **NEVER** expose `dev-keys.json` contents to the LLM
+- ✅ **ONLY** include decrypted quotes text in context (no metadata)
+- ✅ **CAP** user input length (max 500 chars) and sanitize
+- ✅ **LIMIT** context size to max 25 quotes via `LLM_MAX_CONTEXT_QUOTES=25`
+- ✅ **TIMEOUT** LLM calls at 20s (`LLM_REQUEST_TIMEOUT_MS=20000`)
+- ✅ **PRESERVE** existing authorization flow (`isAuthorized(tokenId, user)`)
+- ✅ **PRESERVE** your working 0G Storage flow (`getFileLocations` + `download`)
+- ✅ **MAINTAIN** AES-GCM decryption pattern: `[IV(12)][TAG(16)][DATA]`
+
 ---
 
 ## 1) Current State Snapshot (for alignment)
