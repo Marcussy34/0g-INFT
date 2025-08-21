@@ -305,7 +305,12 @@ export function useINFT() {
         
         if (done) break
         
-        buffer += decoder.decode(value, { stream: true })
+        const chunk = decoder.decode(value, { stream: true })
+        // Debug: observe incoming SSE bytes in devtools
+        if (process.env.NODE_ENV !== 'production') {
+          try { console.debug('[SSE] chunk size', chunk.length) } catch {}
+        }
+        buffer += chunk
 
         // Process complete events (handle both \n\n and \r\n\r\n)
         const events = buffer.split(/\r?\n\r?\n/)
@@ -314,6 +319,9 @@ export function useINFT() {
         events.forEach(eventData => {
           const trimmed = eventData.trim()
           if (trimmed) {
+            if (process.env.NODE_ENV !== 'production') {
+              try { console.debug('[SSE] event raw', trimmed) } catch {}
+            }
             processSSEEvent(trimmed, onToken, onComplete, onError)
           }
         })
@@ -344,14 +352,14 @@ export function useINFT() {
     
     lines.forEach(rawLine => {
       const line = rawLine.replace(/\r$/, '') // tolerate CRLF
-      if (line.startsWith('event: ')) {
-        eventType = line.substring(7).trim()
-      } else if (line.startsWith('data: ')) {
-        // Some servers may split data across multiple data: lines; concatenate
-        const piece = line.substring(6)
+      if (line.startsWith('event:')) {
+        eventType = line.slice(6).trim() // support both 'event:' and 'event: '
+      } else if (line.startsWith('data:')) {
+        // Some servers may send multiple data lines per event. Join with newlines.
+        const piece = line.slice(5).trimStart()
         data = data ? data + piece : piece
-      } else if (line.startsWith('id: ')) {
-        id = line.substring(4).trim()
+      } else if (line.startsWith('id:')) {
+        id = line.slice(3).trim()
       }
     })
     
