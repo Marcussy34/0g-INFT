@@ -248,6 +248,156 @@ export function useINFT() {
     }
   }
 
+  // Streaming inference function (calls off-chain service with SSE)
+  const performStreamingInference = async (tokenId, input, onToken, onComplete, onError) => {
+    try {
+      const response = await fetch(`${OFFCHAIN_SERVICE_URL}/infer/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache'
+        },
+        body: JSON.stringify({
+          tokenId: parseInt(tokenId),
+          input: input,
+          user: account,
+        }),
+      })
+
+      if (!response.ok) {
+        let errorMessage = 'Streaming inference request failed'
+        
+        switch (response.status) {
+          case 403:
+            errorMessage = 'Access denied: You are not authorized to use this INFT.'
+            break
+          case 404:
+            errorMessage = 'INFT not found: The specified token ID does not exist.'
+            break
+          case 400:
+            errorMessage = 'Invalid request: Please check your input and token ID.'
+            break
+          case 429:
+            errorMessage = 'Rate limit exceeded: Too many requests. Please wait and try again.'
+            break
+          case 500:
+            errorMessage = 'Server error: The inference service is currently unavailable.'
+            break
+          case 503:
+            errorMessage = 'Service unavailable: The inference service is temporarily down.'
+            break
+          default:
+            errorMessage = `Inference service error (${response.status}): Please try again.`
+        }
+        
+        const error = new Error(errorMessage)
+        error.handled = true
+        throw error
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        
+        // Process complete events
+        const events = buffer.split('\n\n')
+        buffer = events.pop() // Keep incomplete event in buffer
+        
+        events.forEach(eventData => {
+          if (eventData.trim()) {
+            processSSEEvent(eventData.trim(), onToken, onComplete, onError)
+          }
+        })
+      }
+      
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        const networkError = 'Network error: Cannot connect to streaming inference service.'
+        const netError = new Error(networkError)
+        netError.handled = true
+        onError(netError)
+        return
+      }
+      
+      if (!error.handled) {
+        error.handled = true
+      }
+      onError(error)
+    }
+  }
+
+  // Process Server-Sent Events
+  const processSSEEvent = (eventData, onToken, onComplete, onError) => {
+    const lines = eventData.split('\n')
+    let eventType = 'message'
+    let data = ''
+    let id = ''
+    
+    lines.forEach(line => {
+      if (line.startsWith('event: ')) {
+        eventType = line.substring(7)
+      } else if (line.startsWith('data: ')) {
+        data = line.substring(6)
+      } else if (line.startsWith('id: ')) {
+        id = line.substring(4)
+      }
+    })
+    
+    if (!data) return
+    
+    try {
+      const parsedData = JSON.parse(data)
+      
+      switch (eventType) {
+        case 'start':
+          onToken && onToken({
+            type: 'start',
+            metadata: {
+              provider: parsedData.provider,
+              model: parsedData.model,
+              temperature: parsedData.temperature,
+              requestId: parsedData.requestId,
+              timestamp: parsedData.timestamp
+            }
+          })
+          break
+          
+        case 'token':
+          onToken && onToken({
+            type: 'token',
+            content: parsedData.content,
+            tokenCount: parsedData.tokenCount,
+            done: parsedData.done
+          })
+          break
+          
+        case 'completion':
+          onComplete && onComplete({
+            type: 'completion',
+            fullResponse: parsedData.fullResponse,
+            totalTokens: parsedData.totalTokens,
+            done: parsedData.done
+          })
+          break
+          
+        case 'error':
+          onError && onError(new Error(parsedData.error))
+          break
+      }
+      
+    } catch (e) {
+      onError && onError(new Error(`Parse error: ${data}`))
+    }
+  }
+
   // Check if user is authorized for a token
   const checkAuthorization = (tokenId, userAddress) => {
     return useReadContract({
@@ -300,6 +450,7 @@ export function useINFT() {
     transferINFT,
     cloneINFT,
     performInference,
+    performStreamingInference,
     
     // Read functions
     checkAuthorization,

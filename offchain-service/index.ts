@@ -8,6 +8,7 @@ import * as dotenv from 'dotenv';
 import axios, { AxiosResponse } from 'axios';
 import { rateLimit } from 'express-rate-limit';
 import CircuitBreaker from 'opossum';
+import { createSession } from 'better-sse';
 
 // Load environment variables from parent directory and local
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -391,6 +392,9 @@ class INFTOffChainService {
     // Main inference endpoint
     this.app.post('/infer', this.handleInferRequest.bind(this));
 
+    // Streaming inference endpoint (Phase 4 - SSE)
+    this.app.post('/infer/stream', this.handleStreamingInferRequest.bind(this));
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({ error: 'Endpoint not found' });
@@ -634,6 +638,203 @@ class INFTOffChainService {
         error: 'Internal server error',
         code: 'INTERNAL_ERROR'
       });
+    }
+  }
+
+  /**
+   * Handle streaming inference requests using Server-Sent Events (Phase 4)
+   */
+  private async handleStreamingInferRequest(req: express.Request, res: express.Response): Promise<void> {
+    try {
+      const request: InferRequest = req.body;
+      
+      // Same validation as regular inference endpoint
+      if (!request.tokenId || typeof request.tokenId !== 'number') {
+        res.status(400).json({ 
+          success: false, 
+          error: 'Invalid tokenId. Must be a number.' 
+        });
+        return;
+      }
+
+      if (!request.input || typeof request.input !== 'string') {
+        res.status(400).json({ 
+          success: false, 
+          error: 'Invalid input. Must be a non-empty string.' 
+        });
+        return;
+      }
+
+      const requestId = req.headers['x-request-id'] as string || crypto.randomUUID();
+
+      // Enhanced input validation (same as regular endpoint)
+      if (request.input.length > 500) {
+        this.logStructured({
+          requestId,
+          tokenId: request.tokenId,
+          userAddress: request.user || 'unknown',
+          step: 'streaming_input_validation_failed',
+          error: `Input too long: ${request.input.length} chars (max 500)`
+        });
+        res.status(400).json({ 
+          success: false, 
+          error: 'Input too long. Maximum 500 characters allowed.',
+          code: 'INPUT_TOO_LONG'
+        });
+        return;
+      }
+
+      // Enhanced input sanitization
+      const sanitizedInput = request.input
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
+        .replace(/[^\w\s.,!?'"()-]/g, '') // Allow only alphanumeric, whitespace, and basic punctuation
+        .trim();
+        
+      if (!sanitizedInput) {
+        res.status(400).json({ 
+          success: false, 
+          error: 'Input contains only invalid characters.',
+          code: 'INVALID_CHARACTERS'
+        });
+        return;
+      }
+
+      // Check for suspicious patterns
+      const suspiciousPatterns = [
+        /\b(system|admin|root|password|token|key|secret)\b/i,
+        /<script|javascript:|data:/i,
+        /\$\{.*\}/, // Template literal injection
+        /`.*`/ // Backticks
+      ];
+
+      for (const pattern of suspiciousPatterns) {
+        if (pattern.test(sanitizedInput)) {
+          res.status(400).json({
+            success: false,
+            error: 'Input contains suspicious content.',
+            code: 'SUSPICIOUS_INPUT'
+          });
+          return;
+        }
+      }
+
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress: request.user || 'unknown',
+        step: 'processing_streaming_inference_request'
+      });
+
+      // Step 1: Check authorization on-chain
+      const userAddress = request.user || process.env.DEFAULT_USER_ADDRESS || '0x32F91E4E2c60A9C16cAE736D3b42152B331c147F';
+      
+      const isAuthorized = await this.checkAuthorization(request.tokenId, userAddress);
+      
+      if (!isAuthorized) {
+        this.logStructured({
+          requestId,
+          tokenId: request.tokenId,
+          userAddress,
+          step: 'authorization_failed'
+        });
+        res.status(403).json({
+          success: false,
+          error: 'User not authorized for this token',
+          code: 'UNAUTHORIZED'
+        });
+        return;
+      }
+
+      // Step 2: Create SSE session
+      const session = await createSession(req, res);
+      
+      this.logStructured({
+        requestId,
+        tokenId: request.tokenId,
+        userAddress,
+        step: 'sse_session_created'
+      });
+
+      // Send initial metadata
+      session.push({
+        type: 'start',
+        tokenId: request.tokenId,
+        userAddress,
+        requestId,
+        timestamp: new Date().toISOString(),
+        provider: this.llmConfig.provider,
+        model: this.llmConfig.model,
+        temperature: this.llmConfig.temperature
+      }, 'start');
+
+      try {
+        // Step 3: Download and decrypt data (same as regular endpoint)
+        const encryptedData = await this.fetchFromStorage(this.devKeys.storageRootHash);
+        const decryptedData = this.decryptData(encryptedData);
+
+        // Step 4: Build prompt with context
+        const contextQuotes = decryptedData.quotes
+          .slice(0, this.llmConfig.maxContextQuotes)
+          .map((quote, idx) => `${idx + 1}. "${quote}"`);
+
+        const prompt = `You are a wise quote generator. Based on the user's request and the context quotes below, provide a thoughtful, relevant quote or response. Keep it concise and meaningful.
+
+User request: "${sanitizedInput}"
+
+Context quotes:
+${contextQuotes.join('\n')}
+
+Response:`;
+
+        // Step 5: Perform streaming inference
+        await this.callLLMDirectStreaming(prompt, session);
+
+        this.logStructured({
+          requestId,
+          tokenId: request.tokenId,
+          userAddress,
+          step: 'streaming_inference_completed'
+        });
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        
+        this.logStructured({
+          requestId,
+          tokenId: request.tokenId,
+          userAddress,
+          step: 'streaming_inference_failed',
+          error: errorMessage
+        });
+
+        // Send error to SSE client
+        session.push({
+          type: 'error',
+          error: errorMessage,
+          code: 'INFERENCE_ERROR'
+        }, 'error');
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const requestId = req.headers['x-request-id'] as string || 'unknown';
+      
+      this.logStructured({
+        requestId,
+        tokenId: req.body?.tokenId || 0,
+        userAddress: req.body?.user || 'unknown',
+        step: 'streaming_request_failed',
+        error: errorMessage
+      });
+      
+      // If SSE session wasn't created yet, return JSON error
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: 'Internal server error',
+          code: 'INTERNAL_ERROR'
+        });
+      }
     }
   }
 
@@ -989,6 +1190,121 @@ class INFTOffChainService {
   }
 
   /**
+   * Streaming LLM API call for Server-Sent Events (Phase 4)
+   */
+  private async callLLMDirectStreaming(prompt: string, session: any): Promise<void> {
+    const requestPayload = {
+      model: this.llmConfig.model,
+      prompt: prompt,
+      stream: true, // Enable streaming
+      options: {
+        temperature: this.llmConfig.temperature,
+        seed: this.llmConfig.seed,
+        num_predict: this.llmConfig.maxTokens
+      }
+    };
+
+    console.log(`🌐 Calling Ollama API (streaming): ${this.llmConfig.host}/api/generate`);
+    
+    try {
+      const response = await axios.post(
+        `${this.llmConfig.host}/api/generate`,
+        requestPayload,
+        {
+          timeout: this.llmConfig.requestTimeoutMs,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          responseType: 'stream'
+        }
+      );
+
+      let fullResponse = '';
+      let tokenCount = 0;
+
+      // Process the streaming response
+      response.data.on('data', (chunk: Buffer) => {
+        const lines = chunk.toString().split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            
+            if (data.response) {
+              fullResponse += data.response;
+              tokenCount++;
+              
+              // Send token to SSE client
+              session.push({
+                type: 'token',
+                content: data.response,
+                tokenCount: tokenCount,
+                done: data.done || false
+              }, 'token');
+            }
+            
+            // Check if stream is complete
+            if (data.done) {
+              // Send final completion event
+              session.push({
+                type: 'completion',
+                fullResponse: fullResponse,
+                totalTokens: tokenCount,
+                done: true
+              }, 'completion');
+              console.log(`⚡ Streaming LLM response completed (${tokenCount} tokens, ${fullResponse.length} chars)`);
+              return;
+            }
+          } catch (parseError) {
+            // Skip invalid JSON lines
+            console.warn('Failed to parse streaming response line:', line);
+          }
+        }
+      });
+
+      response.data.on('error', (error: Error) => {
+        console.error('Streaming response error:', error);
+        session.push({
+          type: 'error',
+          error: error.message
+        }, 'error');
+      });
+
+      response.data.on('end', () => {
+        if (fullResponse === '') {
+          // Send error if no response received
+          session.push({
+            type: 'error',
+            error: 'No response received from LLM'
+          }, 'error');
+        }
+      });
+      
+    } catch (error) {
+      console.error('Streaming LLM call error:', error);
+      let errorMessage = 'Unknown error';
+      
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNREFUSED') {
+          errorMessage = `Cannot connect to Ollama at ${this.llmConfig.host}. Is Ollama running?`;
+        } else if (error.code === 'ECONNABORTED') {
+          errorMessage = `LLM request timeout after ${this.llmConfig.requestTimeoutMs}ms`;
+        } else {
+          errorMessage = `Ollama API error: ${error.message}`;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Send error to SSE client
+      session.push({
+        type: 'error',
+        error: errorMessage
+      }, 'error');
+    }
+  }
+
+  /**
    * Enhanced LLM health check with diagnostics (Phase 3)
    */
   private async handleLLMHealthCheck(req: express.Request, res: express.Response): Promise<void> {
@@ -1143,9 +1459,10 @@ class INFTOffChainService {
       console.log('=' .repeat(60));
       console.log(`🌐 Server running on http://localhost:${this.port}`);
       console.log('📋 Available endpoints:');
-      console.log('  - GET  /health     - Service health check');
-      console.log('  - GET  /llm/health - LLM health check');
-      console.log('  - POST /infer      - LLM inference endpoint');
+      console.log('  - GET  /health       - Service health check');
+      console.log('  - GET  /llm/health   - LLM health check');
+      console.log('  - POST /infer        - LLM inference endpoint');
+      console.log('  - POST /infer/stream - LLM streaming inference (SSE)');
       console.log('');
       console.log('📝 Example curl command:');
       console.log(`curl -X POST http://localhost:${this.port}/infer \\`);

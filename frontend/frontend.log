@@ -1,0 +1,35 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+ ⚠ Warning: Found multiple lockfiles. Selecting /Users/marcus/package-lock.json.
+   Consider removing the lockfiles at:
+   * /Users/marcus/Projects/0g-INFT/frontend/package-lock.json
+   * /Users/marcus/Projects/0g-INFT/package-lock.json
+   * /Users/marcus/Projects/package-lock.json
+
+ ⚠ Port 3000 is in use by process 14354, using available port 3001 instead.
+   ▲ Next.js 15.4.7
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.1.240:3001
+   - Experiments (use with caution):
+     ✓ forceSwcTransforms
+
+ ✓ Starting...
+ ⚠ Invalid next.config.mjs options detected: 
+ ⚠     Unrecognized key(s) in object: 'fastRefresh'
+ ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+ ✓ Ready in 1058ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 4.7s (4388 modules)
+ GET /_next/static/webpack/77f0100c3c6059c1.webpack.hot-update.json 404 in 5404ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ○ Compiling / ...
+ ✓ Compiled / in 1136ms (4445 modules)
+ GET /_next/static/webpack/77f0100c3c6059c1.webpack.hot-update.json 404 in 1012ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 200 in 1528ms
+ GET / 200 in 229ms
+ GET / 200 in 235ms
+ ✓ Compiled in 631ms (4445 modules)
+ GET / 404 in 245ms

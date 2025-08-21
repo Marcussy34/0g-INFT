@@ -12,7 +12,10 @@ import {
   Settings,
   PlusCircle,
   Shield,
-  Zap
+  Zap,
+  Radio,
+  Play,
+  Square
 } from 'lucide-react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
@@ -157,6 +160,7 @@ export default function INFTDashboard() {
     revokeUsage,
     transferINFT,
     performInference,
+    performStreamingInference,
     hash,
     isWritePending,
     isConfirming,
@@ -190,6 +194,13 @@ export default function INFTDashboard() {
   const [inferenceResult, setInferenceResult] = useState(null)
   const [isInferring, setIsInferring] = useState(false)
   const [inferenceError, setInferenceError] = useState(null)
+  
+  // Streaming-related state
+  const [isStreamingMode, setIsStreamingMode] = useState(false)
+  const [streamingTokens, setStreamingTokens] = useState([])
+  const [streamingMetadata, setStreamingMetadata] = useState(null)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingComplete, setStreamingComplete] = useState(false)
   
   // Authorization checker state
   const [authCheckForm, setAuthCheckForm] = useState({
@@ -277,32 +288,76 @@ export default function INFTDashboard() {
       return
     }
     
-    // Wrap async operation to prevent unhandled promise rejection
-    const runInference = async () => {
-      setIsInferring(true)
-      setInferenceError(null) // Clear previous errors
-      setInferenceResult(null) // Clear previous results
-      
-      try {
-        const result = await performInference(inferForm.tokenId, inferForm.input)
-        setInferenceResult(result)
-        setInferenceError(null) // Clear any previous errors on success
-      } catch (error) {
-        // Handle the error gracefully without propagating to error boundary
-        console.warn('Inference failed (handled):', error.message)
-        setInferenceError(error.message)
-        setInferenceResult(null)
-      } finally {
-        setIsInferring(false)
-      }
-    }
+    // Clear previous results
+    setInferenceError(null)
+    setInferenceResult(null)
+    setStreamingTokens([])
+    setStreamingMetadata(null)
+    setStreamingComplete(false)
     
-    // Execute the async operation and catch any unhandled rejections
-    runInference().catch((error) => {
-      console.warn('Unhandled inference error:', error.message)
-      setInferenceError(error.message || 'An unexpected error occurred')
-      setIsInferring(false)
-    })
+    if (isStreamingMode) {
+      // Handle streaming inference
+      setIsStreaming(true)
+      
+      const handleToken = (tokenData) => {
+        if (tokenData.type === 'start') {
+          setStreamingMetadata(tokenData.metadata)
+        } else if (tokenData.type === 'token') {
+          setStreamingTokens(prev => [...prev, tokenData])
+        }
+      }
+      
+      const handleComplete = (completionData) => {
+        setStreamingComplete(true)
+        setIsStreaming(false)
+        setInferenceResult({
+          success: true,
+          output: completionData.fullResponse,
+          metadata: {
+            ...streamingMetadata,
+            totalTokens: completionData.totalTokens
+          }
+        })
+      }
+      
+      const handleError = (error) => {
+        console.warn('Streaming inference failed:', error.message)
+        setInferenceError(error.message)
+        setIsStreaming(false)
+      }
+      
+      performStreamingInference(
+        inferForm.tokenId, 
+        inferForm.input, 
+        handleToken, 
+        handleComplete, 
+        handleError
+      ).catch(handleError)
+      
+    } else {
+      // Handle regular inference
+      const runInference = async () => {
+        setIsInferring(true)
+        
+        try {
+          const result = await performInference(inferForm.tokenId, inferForm.input)
+          setInferenceResult(result)
+          setInferenceError(null)
+        } catch (error) {
+          console.warn('Inference failed (handled):', error.message)
+          setInferenceError(error.message)
+          setInferenceResult(null)
+        } finally {
+          setIsInferring(false)
+        }
+      }
+      
+      runInference().catch((error) => {
+        console.warn('Unhandled inference error:', error.message)
+        setInferenceError(error.message || 'An unexpected error occurred')
+        setIsInferring(false)
+      })
+    }
   }
 
   // Handle transfer with TEE mock integration
@@ -830,19 +885,135 @@ export default function INFTDashboard() {
                     placeholder="inspire me"
                   />
                 </div>
+                
+                {/* Streaming Toggle */}
+                <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-blue-600" />
+                    <Label htmlFor="streamingToggle" className="text-sm font-medium text-blue-700">
+                      Real-time Streaming
+                    </Label>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={isStreamingMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setIsStreamingMode(!isStreamingMode)}
+                    className="h-8"
+                  >
+                    {isStreamingMode ? (
+                      <>
+                        <Square className="mr-1 h-3 w-3" />
+                        Streaming
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-1 h-3 w-3" />
+                        Regular
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isInferring}
+                  disabled={isInferring || isStreaming}
                 >
-                  {isInferring ? 'Processing...' : 'Run Inference'}
+                  {isStreaming ? (
+                    <>
+                      <Radio className="mr-2 h-4 w-4 animate-pulse" />
+                      Streaming...
+                    </>
+                  ) : isInferring ? (
+                    'Processing...'
+                  ) : isStreamingMode ? (
+                    <>
+                      <Radio className="mr-2 h-4 w-4" />
+                      Start Streaming
+                    </>
+                  ) : (
+                    'Run Inference'
+                  )}
                 </Button>
                 
+                {/* Streaming Metadata Display */}
+                {streamingMetadata && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 className="font-semibold text-blue-800 mb-2">🚀 Streaming Session Started</h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm text-blue-700">
+                      <div>🤖 Provider: <span className="font-mono">{streamingMetadata.provider}</span></div>
+                      <div>🧠 Model: <span className="font-mono">{streamingMetadata.model}</span></div>
+                      <div>🌡️ Temperature: <span className="font-mono">{streamingMetadata.temperature}</span></div>
+                      <div>⏰ Started: <span className="font-mono">{new Date(streamingMetadata.timestamp).toLocaleTimeString()}</span></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Streaming Tokens Display */}
+                {(isStreaming || streamingTokens.length > 0) && (
+                  <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-gray-800">
+                        {isStreaming ? (
+                          <>
+                            <Radio className="inline h-4 w-4 mr-1 animate-pulse text-blue-600" />
+                            Live Streaming
+                          </>
+                        ) : (
+                          <>✅ Stream Complete</>
+                        )}
+                      </h4>
+                      {streamingTokens.length > 0 && (
+                        <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                          {streamingTokens.length} tokens
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="bg-white p-3 border rounded min-h-[80px] max-h-60 overflow-y-auto">
+                      <div className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed">
+                        {streamingTokens.map((token, index) => (
+                          <span 
+                            key={index} 
+                            className="inline-block animate-in fade-in duration-200"
+                            style={{ animationDelay: `${index * 50}ms` }}
+                          >
+                            {token.content}
+                          </span>
+                        ))}
+                        {isStreaming && (
+                          <span className="inline-block w-2 h-4 bg-blue-600 animate-pulse ml-1"></span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Inference Success Result */}
                 {inferenceResult && (
                   <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                     <h4 className="font-semibold text-green-800 mb-2">✅ Inference Result:</h4>
-                    <p className="text-green-700">{inferenceResult.output}</p>
+                    <p className="text-green-700 whitespace-pre-wrap">{inferenceResult.output}</p>
+                    
+                    {/* Enhanced Metadata Display */}
+                    {inferenceResult.metadata && (
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-green-600">
+                        {inferenceResult.metadata.provider && (
+                          <div>🤖 Provider: <span className="font-mono">{inferenceResult.metadata.provider}</span></div>
+                        )}
+                        {inferenceResult.metadata.model && (
+                          <div>🧠 Model: <span className="font-mono">{inferenceResult.metadata.model}</span></div>
+                        )}
+                        {inferenceResult.metadata.temperature && (
+                          <div>🌡️ Temperature: <span className="font-mono">{inferenceResult.metadata.temperature}</span></div>
+                        )}
+                        {inferenceResult.metadata.totalTokens && (
+                          <div>🔢 Tokens: <span className="font-mono">{inferenceResult.metadata.totalTokens}</span></div>
+                        )}
+                      </div>
+                    )}
+                    
                     {inferenceResult.proof && (
                       <p className="text-xs text-green-600 mt-2">
                         🔐 Proof: {inferenceResult.proof.slice(0, 50)}...
